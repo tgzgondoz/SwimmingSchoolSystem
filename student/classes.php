@@ -117,10 +117,6 @@ $classes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 // Get unique values for filters
 $age_groups = $conn->query("SELECT DISTINCT age_group FROM classes WHERE start_time >= NOW() ORDER BY age_group")->fetch_all(MYSQLI_ASSOC);
 $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->fetch_all(MYSQLI_ASSOC);
-
-// Get unique levels from classes
-$levels_result = $conn->query("SELECT DISTINCT level FROM classes WHERE start_time >= NOW() AND level IS NOT NULL ORDER BY level");
-$levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -554,11 +550,6 @@ $levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
             letter-spacing: 0.5px;
         }
 
-        .badge-level {
-            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-            color: white;
-        }
-
         .badge-age {
             background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
             color: white;
@@ -925,7 +916,7 @@ $levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
                 
                 <form method="GET" class="filter-form">
                     <div class="row g-3">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">Age Group</label>
                             <select class="form-select" name="age_group">
                                 <option value="">All Age Groups</option>
@@ -938,7 +929,7 @@ $levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
                             </select>
                         </div>
                         
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">Instructor</label>
                             <select class="form-select" name="instructor">
                                 <option value="">All Instructors</option>
@@ -951,22 +942,7 @@ $levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
                             </select>
                         </div>
                         
-                        <div class="col-md-3">
-                            <label class="form-label">Skill Level</label>
-                            <select class="form-select" name="level">
-                                <option value="">All Levels</option>
-                                <?php if(!empty($levels)): ?>
-                                    <?php foreach($levels as $level): ?>
-                                        <option value="<?= htmlspecialchars($level['level'] ?? '') ?>" 
-                                            <?= ($_GET['level'] ?? '') == $level['level'] ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars(ucfirst($level['level'] ?? '')) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </select>
-                        </div>
-                        
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">Date</label>
                             <input type="date" class="form-control" name="date" 
                                    value="<?= htmlspecialchars($date_filter) ?>"
@@ -1020,8 +996,8 @@ $levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
                         ?>
                             <div class="class-card">
                                 <!-- Badges -->
-                                <div class="class-badge badge-level">
-                                    <?= htmlspecialchars(ucfirst($class['level'] ?? 'All Levels')) ?>
+                                <div class="class-badge badge-age">
+                                    <?= htmlspecialchars($class['age_group']) ?>
                                 </div>
                                 
                                 <!-- Class Image -->
@@ -1061,10 +1037,6 @@ $levels = $levels_result ? $levels_result->fetch_all(MYSQLI_ASSOC) : [];
                                         <div class="detail-item">
                                             <i class="bi bi-hourglass"></i>
                                             <span><?= $duration_minutes ?> minutes</span>
-                                        </div>
-                                        <div class="detail-item">
-                                            <i class="bi bi-people"></i>
-                                            <span><?= htmlspecialchars($class['age_group']) ?></span>
                                         </div>
                                         <?php if(!empty($class['description'])): ?>
                                             <p class="mt-2 text-muted" style="font-size: 14px;">

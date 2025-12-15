@@ -1,5 +1,5 @@
 <?php
-// student/bookings.php - Manage class bookings
+// student/my-bookings.php - Student's Bookings Management
 session_start();
 include __DIR__ . '/../inc/db.php';
 include __DIR__ . '/../inc/functions.php';
@@ -8,8 +8,8 @@ requireRole('student');
 $user = getCurrentUser($conn);
 $student_id = $_SESSION['user_id'];
 
-$success_message = '';
-$error_message = '';
+// Initialize messages
+$success_message = $error_message = '';
 
 // Handle booking cancellation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
             $success_message = "Booking cancelled successfully. Your slot has been freed.";
             
             // Refresh page
-            header("Location: bookings.php?success=" . urlencode($success_message));
+            header("Location: my-bookings.php?success=" . urlencode($success_message));
             exit();
         } else {
             $error_message = "Booking not found or you don't have permission to cancel it.";
@@ -62,27 +62,64 @@ if (isset($_GET['error'])) {
     $error_message = htmlspecialchars($_GET['error']);
 }
 
-// Get active bookings
-$active_bookings = $conn->query("
-    SELECT b.*, c.title, c.start_time, c.end_time, c.age_group, c.price, 
-           i.name as instructor_name, c.slots_available, c.max_capacity
-    FROM bookings b
-    JOIN classes c ON b.class_id = c.id
-    LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE b.user_id = $student_id AND b.status = 'confirmed'
-    ORDER BY c.start_time ASC
-")->fetch_all(MYSQLI_ASSOC);
+// Filter bookings
+$status_filter = isset($_GET['status']) ? $_GET['status'] : '';
+$type_filter = isset($_GET['type']) ? $_GET['type'] : 'all';
 
-// Get cancelled bookings
-$cancelled_bookings = $conn->query("
-    SELECT b.*, c.title, c.start_time, c.end_time, i.name as instructor_name
+// Build query based on filters
+$where_conditions = ["b.user_id = ?"];
+$params = [$student_id];
+$types = 'i';
+
+if ($status_filter) {
+    $where_conditions[] = "b.status = ?";
+    $params[] = $status_filter;
+    $types .= 's';
+}
+
+if ($type_filter === 'upcoming') {
+    $where_conditions[] = "c.start_time >= NOW()";
+} elseif ($type_filter === 'past') {
+    $where_conditions[] = "c.start_time < NOW()";
+}
+
+// Get bookings
+$query = "
+    SELECT b.*, c.*, i.name as instructor_name,
+           CASE 
+               WHEN c.start_time < NOW() THEN 'past'
+               ELSE 'upcoming'
+           END as time_status
     FROM bookings b
     JOIN classes c ON b.class_id = c.id
     LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE b.user_id = $student_id AND b.status = 'cancelled'
-    ORDER BY b.cancellation_date DESC
-    LIMIT 10
-")->fetch_all(MYSQLI_ASSOC);
+    WHERE " . implode(' AND ', $where_conditions) . "
+    ORDER BY c.start_time DESC
+";
+
+$stmt = $conn->prepare($query);
+$stmt->bind_param($types, ...$params);
+$stmt->execute();
+$bookings = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// Get booking statistics
+$stats_query = "
+    SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN b.status = 'confirmed' THEN 1 ELSE 0 END) as confirmed,
+        SUM(CASE WHEN b.status = 'pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
+        SUM(CASE WHEN c.start_time >= NOW() AND b.status = 'confirmed' THEN 1 ELSE 0 END) as upcoming
+    FROM bookings b
+    JOIN classes c ON b.class_id = c.id
+    WHERE b.user_id = ?
+";
+$stats_stmt = $conn->prepare($stats_query);
+$stats_stmt->bind_param('i', $student_id);
+$stats_stmt->execute();
+$stats = $stats_stmt->get_result()->fetch_assoc();
+
+// Get CSS from classes.php for consistent styling
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -386,6 +423,11 @@ $cancelled_bookings = $conn->query("
             color: var(--warning);
         }
 
+        .stat-icon.danger {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            color: var(--danger);
+        }
+
         .stat-value {
             font-size: 32px;
             font-weight: 700;
@@ -397,6 +439,33 @@ $cancelled_bookings = $conn->query("
             color: var(--gray-500);
             font-size: 14px;
             font-weight: 500;
+        }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 12px 20px;
+            border-radius: 10px;
+            background: white;
+            border: 2px solid var(--gray-200);
+            color: var(--gray-600);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .filter-tab:hover, .filter-tab.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
         }
 
         /* Booking Cards */
@@ -419,6 +488,8 @@ $cancelled_bookings = $conn->query("
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--gray-200);
         }
 
         .booking-title {
@@ -443,7 +514,22 @@ $cancelled_bookings = $conn->query("
             color: white;
         }
 
+        .badge-pending {
+            background: linear-gradient(135deg, var(--warning) 0%, #d97706 100%);
+            color: white;
+        }
+
         .badge-cancelled {
+            background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .badge-upcoming {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+        }
+
+        .badge-past {
             background: linear-gradient(135deg, var(--gray-400) 0%, var(--gray-500) 100%);
             color: white;
         }
@@ -505,10 +591,29 @@ $cancelled_bookings = $conn->query("
             box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
         }
 
+        .btn-view {
+            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-view:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(13, 110, 253, 0.3);
+        }
+
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 80px 20px;
             background: white;
             border-radius: 15px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
@@ -537,6 +642,27 @@ $cancelled_bookings = $conn->query("
             margin-right: auto;
         }
 
+        /* Instructor Info */
+        .instructor-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .instructor-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
         /* Responsive Design */
         @media (max-width: 992px) {
             .sidebar {
@@ -558,6 +684,11 @@ $cancelled_bookings = $conn->query("
             .main-content {
                 padding: 20px;
             }
+            
+            .filter-tabs {
+                overflow-x: auto;
+                padding-bottom: 10px;
+            }
         }
 
         @media (max-width: 768px) {
@@ -578,14 +709,36 @@ $cancelled_bookings = $conn->query("
             .booking-header {
                 flex-direction: column;
                 gap: 10px;
+                align-items: flex-start;
             }
             
             .booking-actions {
                 flex-direction: column;
             }
             
-            .btn-cancel {
+            .btn-view, .btn-cancel {
                 width: 100%;
+                justify-content: center;
+            }
+            
+            .filter-tabs {
+                flex-direction: column;
+            }
+        }
+
+        /* Animations */
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
             }
         }
     </style>
@@ -620,7 +773,7 @@ $cancelled_bookings = $conn->query("
                     </a>
                 </div>
                 <div class="nav-item">
-                    <a href="bookings.php" class="nav-link active">
+                    <a href="my-bookings.php" class="nav-link active">
                         <i class="bi bi-ticket-perforated"></i>
                         <span class="nav-text">My Bookings</span>
                     </a>
@@ -689,50 +842,64 @@ $cancelled_bookings = $conn->query("
                     <div class="stat-icon primary">
                         <i class="bi bi-calendar-check"></i>
                     </div>
-                    <div class="stat-value"><?= count($active_bookings) ?></div>
-                    <div class="stat-label">Active Bookings</div>
+                    <div class="stat-value"><?= $stats['total'] ?? 0 ?></div>
+                    <div class="stat-label">Total Bookings</div>
                 </div>
                 
                 <div class="stat-card">
                     <div class="stat-icon success">
                         <i class="bi bi-check-circle"></i>
                     </div>
-                    <div class="stat-value"><?= count($cancelled_bookings) ?></div>
-                    <div class="stat-label">Cancelled Bookings</div>
+                    <div class="stat-value"><?= $stats['confirmed'] ?? 0 ?></div>
+                    <div class="stat-label">Confirmed</div>
                 </div>
                 
                 <div class="stat-card">
                     <div class="stat-icon warning">
                         <i class="bi bi-clock-history"></i>
                     </div>
-                    <?php
-                    $upcoming_count = 0;
-                    foreach ($active_bookings as $booking) {
-                        if (strtotime($booking['start_time']) > time()) {
-                            $upcoming_count++;
-                        }
-                    }
-                    ?>
-                    <div class="stat-value"><?= $upcoming_count ?></div>
-                    <div class="stat-label">Upcoming Classes</div>
+                    <div class="stat-value"><?= $stats['upcoming'] ?? 0 ?></div>
+                    <div class="stat-label">Upcoming</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon danger">
+                        <i class="bi bi-x-circle"></i>
+                    </div>
+                    <div class="stat-value"><?= $stats['cancelled'] ?? 0 ?></div>
+                    <div class="stat-label">Cancelled</div>
                 </div>
             </div>
 
-            <!-- Active Bookings Section -->
-            <div class="fade-in">
-                <h2 class="mb-4" style="font-family: 'Poppins', sans-serif; font-weight: 600;">Active Bookings</h2>
-                
-                <?php if(empty($active_bookings)): ?>
-                    <div class="empty-state">
-                        <i class="bi bi-calendar-x"></i>
-                        <h3>No Active Bookings</h3>
-                        <p>You haven't booked any swimming classes yet. Browse available classes to get started.</p>
-                        <a href="classes.php" class="btn-primary" style="display: inline-block; padding: 12px 24px; text-decoration: none;">
-                            <i class="bi bi-calendar-plus me-2"></i>Browse Classes
-                        </a>
-                    </div>
-                <?php else: ?>
-                    <?php foreach($active_bookings as $booking): 
+            <!-- Filter Tabs -->
+            <div class="filter-tabs fade-in">
+                <a href="my-bookings.php" class="filter-tab <?= !$type_filter && !$status_filter ? 'active' : '' ?>">All Bookings</a>
+                <a href="my-bookings.php?type=upcoming" class="filter-tab <?= $type_filter === 'upcoming' ? 'active' : '' ?>">Upcoming</a>
+                <a href="my-bookings.php?type=past" class="filter-tab <?= $type_filter === 'past' ? 'active' : '' ?>">Past</a>
+                <a href="my-bookings.php?status=confirmed" class="filter-tab <?= $status_filter === 'confirmed' ? 'active' : '' ?>">Confirmed</a>
+                <a href="my-bookings.php?status=pending" class="filter-tab <?= $status_filter === 'pending' ? 'active' : '' ?>">Pending</a>
+                <a href="my-bookings.php?status=cancelled" class="filter-tab <?= $status_filter === 'cancelled' ? 'active' : '' ?>">Cancelled</a>
+            </div>
+
+            <!-- Bookings List -->
+            <?php if(empty($bookings)): ?>
+                <div class="empty-state fade-in">
+                    <i class="bi bi-calendar-x"></i>
+                    <h3>No Bookings Found</h3>
+                    <p>
+                        <?php if($status_filter || $type_filter): ?>
+                            No bookings match your current filters.
+                        <?php else: ?>
+                            You haven't booked any classes yet.
+                        <?php endif; ?>
+                    </p>
+                    <a href="classes.php" class="btn-view">
+                        <i class="bi bi-search me-2"></i>Browse Classes
+                    </a>
+                </div>
+            <?php else: ?>
+                <div class="fade-in">
+                    <?php foreach($bookings as $booking): 
                         $start_time = strtotime($booking['start_time']);
                         $end_time = strtotime($booking['end_time']);
                         $duration_minutes = ($end_time - $start_time) / 60;
@@ -740,10 +907,27 @@ $cancelled_bookings = $conn->query("
                     ?>
                         <div class="booking-card">
                             <div class="booking-header">
-                                <h3 class="booking-title"><?= htmlspecialchars($booking['title']) ?></h3>
-                                <span class="booking-badge badge-confirmed">
-                                    <?= $is_upcoming ? 'Upcoming' : 'Completed' ?>
-                                </span>
+                                <div>
+                                    <h3 class="booking-title"><?= htmlspecialchars($booking['title']) ?></h3>
+                                    <div class="instructor-info">
+                                        <div class="instructor-avatar">
+                                            <?= strtoupper(substr($booking['instructor_name'] ?? 'I', 0, 1)) ?>
+                                        </div>
+                                        <div>
+                                            <div class="fw-medium"><?= htmlspecialchars($booking['instructor_name'] ?? 'TBA') ?></div>
+                                            <small class="text-muted">Certified Instructor</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span class="booking-badge badge-<?= $booking['status'] ?>">
+                                        <?= ucfirst($booking['status']) ?>
+                                    </span>
+                                    <br>
+                                    <span class="booking-badge mt-2 <?= $is_upcoming ? 'badge-upcoming' : 'badge-past' ?>">
+                                        <?= $is_upcoming ? 'Upcoming' : 'Past' ?>
+                                    </span>
+                                </div>
                             </div>
                             
                             <div class="booking-details">
@@ -751,13 +935,8 @@ $cancelled_bookings = $conn->query("
                                     <div class="detail-label">Date & Time</div>
                                     <div class="detail-value">
                                         <?= date('F j, Y', $start_time) ?><br>
-                                        <?= date('g:i A', $start_time) ?> - <?= date('g:i A', $end_time) ?>
+                                        <small><?= date('g:i A', $start_time) ?> - <?= date('g:i A', $end_time) ?></small>
                                     </div>
-                                </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Instructor</div>
-                                    <div class="detail-value"><?= htmlspecialchars($booking['instructor_name'] ?? 'TBA') ?></div>
                                 </div>
                                 
                                 <div class="detail-box">
@@ -767,67 +946,35 @@ $cancelled_bookings = $conn->query("
                                 
                                 <div class="detail-box">
                                     <div class="detail-label">Price</div>
-                                    <div class="detail-value">$<?= number_format($booking['price'], 2) ?></div>
+                                    <div class="detail-value">$<?= number_format($booking['price'] ?? 0, 2) ?></div>
                                 </div>
                                 
                                 <div class="detail-box">
                                     <div class="detail-label">Booking Date</div>
                                     <div class="detail-value"><?= date('F j, Y', strtotime($booking['booking_date'])) ?></div>
                                 </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Slots</div>
-                                    <div class="detail-value">
-                                        <?= $booking['slots_available'] ?> of <?= $booking['max_capacity'] ?> available
-                                    </div>
-                                </div>
                             </div>
                             
-                            <?php if($is_upcoming): ?>
-                                <div class="booking-actions">
-                                    <form method="POST">
+                            <?php if($booking['description']): ?>
+                                <div class="mb-3">
+                                    <div class="detail-label mb-2">Description</div>
+                                    <p class="text-muted" style="font-size: 14px;">
+                                        <?= htmlspecialchars(substr($booking['description'], 0, 200)) ?>
+                                        <?= strlen($booking['description']) > 200 ? '...' : '' ?>
+                                    </p>
+                                </div>
+                            <?php endif; ?>
+                            
+                            <div class="booking-actions">
+                                <?php if($is_upcoming && $booking['status'] === 'confirmed'): ?>
+                                    <form method="POST" class="d-inline">
                                         <input type="hidden" name="booking_id" value="<?= $booking['id'] ?>">
-                                        <button type="submit" name="cancel_booking" class="btn-cancel" onclick="return confirm('Are you sure you want to cancel this booking?')">
+                                        <button type="submit" name="cancel_booking" class="btn-cancel">
                                             <i class="bi bi-x-circle"></i>
                                             Cancel Booking
                                         </button>
                                     </form>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-
-            <!-- Cancelled Bookings Section -->
-            <?php if(!empty($cancelled_bookings)): ?>
-                <div class="fade-in mt-5">
-                    <h2 class="mb-4" style="font-family: 'Poppins', sans-serif; font-weight: 600;">Cancelled Bookings</h2>
-                    
-                    <?php foreach($cancelled_bookings as $booking): 
-                        $start_time = strtotime($booking['start_time']);
-                    ?>
-                        <div class="booking-card" style="opacity: 0.8;">
-                            <div class="booking-header">
-                                <h3 class="booking-title"><?= htmlspecialchars($booking['title']) ?></h3>
-                                <span class="booking-badge badge-cancelled">Cancelled</span>
-                            </div>
-                            
-                            <div class="booking-details">
-                                <div class="detail-box">
-                                    <div class="detail-label">Class Date</div>
-                                    <div class="detail-value"><?= date('F j, Y', $start_time) ?></div>
-                                </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Instructor</div>
-                                    <div class="detail-value"><?= htmlspecialchars($booking['instructor_name'] ?? 'TBA') ?></div>
-                                </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Cancellation Date</div>
-                                    <div class="detail-value"><?= date('F j, Y', strtotime($booking['cancellation_date'])) ?></div>
-                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -850,8 +997,12 @@ $cancelled_bookings = $conn->query("
             const cancelForms = document.querySelectorAll('form[method="POST"]');
             cancelForms.forEach(form => {
                 form.addEventListener('submit', function(e) {
+                    if (!confirm('Are you sure you want to cancel this booking? This action cannot be undone.')) {
+                        e.preventDefault();
+                        return;
+                    }
+                    
                     const button = this.querySelector('button[type="submit"]');
-                    const classTitle = this.closest('.booking-card').querySelector('.booking-title').textContent;
                     
                     // Show loading state
                     const originalText = button.innerHTML;
@@ -882,6 +1033,15 @@ $cancelled_bookings = $conn->query("
                     }
                     stat.textContent = current;
                 }, 50);
+            });
+            
+            // Add active state to filter tabs
+            const filterTabs = document.querySelectorAll('.filter-tab');
+            filterTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    filterTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                });
             });
         });
     </script>
