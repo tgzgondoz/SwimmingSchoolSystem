@@ -206,27 +206,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Function to get setting with fallback
-function getSetting($conn, $key, $default = '') {
-    $stmt = $conn->prepare("SELECT setting_value FROM settings WHERE setting_key = ?");
-    if (!$stmt) {
-        return $default;
-    }
-    
-    $stmt->bind_param('s', $key);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result && $row = $result->fetch_assoc()) {
-        $value = $row['setting_value'];
-        $stmt->close();
-        return $value;
-    }
-    
-    $stmt->close();
-    return $default;
-}
-
 // Load settings from database
 $settings = [
     'school_name' => htmlspecialchars(getSetting($conn, 'school_name', 'AquaFlow Swimming School')),
@@ -1035,6 +1014,17 @@ if (!isset($business_hours['sunday'])) {
           }, 100);
         });
       }
+      
+      // Mobile sidebar toggle
+      const sidebarToggle = document.createElement('button');
+      sidebarToggle.className = 'btn btn-primary btn-sm d-md-none position-fixed bottom-0 start-0 m-3';
+      sidebarToggle.innerHTML = '<i class="bi bi-list"></i>';
+      sidebarToggle.style.zIndex = '1050';
+      sidebarToggle.onclick = function() {
+        document.querySelector('.sidebar').classList.toggle('active');
+        document.querySelector('.main-content').classList.toggle('active');
+      };
+      document.body.appendChild(sidebarToggle);
     });
 
     function setTheme(theme) {
@@ -1064,17 +1054,6 @@ if (!isset($business_hours['sunday'])) {
       // Save to localStorage
       localStorage.setItem('theme', theme);
     }
-
-    // Mobile sidebar toggle
-    const sidebarToggle = document.createElement('button');
-    sidebarToggle.className = 'btn btn-primary btn-sm d-md-none position-fixed bottom-0 start-0 m-3';
-    sidebarToggle.innerHTML = '<i class="bi bi-list"></i>';
-    sidebarToggle.style.zIndex = '1050';
-    sidebarToggle.onclick = function() {
-      document.querySelector('.sidebar').classList.toggle('active');
-      document.querySelector('.main-content').classList.toggle('active');
-    };
-    document.body.appendChild(sidebarToggle);
   </script>
 </body>
 </html>
