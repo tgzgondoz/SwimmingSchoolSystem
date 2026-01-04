@@ -102,33 +102,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initiate_payment'])) 
     $amount = floatval($_POST['amount']);
     $method = $_POST['payment_method'];
     
-    // Generate payment reference
-    $payment_reference = 'PAY' . time() . rand(100, 999);
-    
-    // Create payment record
-    $stmt = $conn->prepare("
-        INSERT INTO payments (user_id, amount, payment_method, reference, status, payment_date) 
-        VALUES (?, ?, ?, ?, 'pending', NOW())
-    ");
-    $stmt->bind_param('idss', $student_id, $amount, $method, $payment_reference);
-    
-    if ($stmt->execute()) {
-        $payment_id = $stmt->insert_id;
-        
-        // For pending bookings, associate them with this payment
-        foreach ($pending_payments as $pending) {
-            $stmt2 = $conn->prepare("
-                UPDATE bookings 
-                SET payment_id = ? 
-                WHERE id = ? AND user_id = ?
-            ");
-            $stmt2->bind_param('iii', $payment_id, $pending['booking_id'], $student_id);
-            $stmt2->execute();
-        }
-        
-        $success_message = "Payment initiated! Reference: $payment_reference";
+    // For each pending booking create a payment row
+    if (empty($pending_payments)) {
+        $error_message = 'No pending bookings to pay for.';
     } else {
-        $error_message = "Failed to initiate payment.";
+        $first_payment_booking = null;
+        foreach ($pending_payments as $pending) {
+            $booking_id = intval($pending['booking_id']);
+            $price = (float)$pending['price'];
+            $reference = 'PAY' . time() . rand(100,999);
+            $desc = 'Payment for booking #' . $booking_id;
+
+            $ins = $conn->prepare("INSERT INTO payments (booking_id, user_id, amount, payment_method, reference_number, description, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW())");
+            if ($ins) {
+                $ins->bind_param('iidsss', $booking_id, $student_id, $price, $method, $reference, $desc);
+                $ins->execute();
+                $ins->close();
+                if (!$first_payment_booking) $first_payment_booking = $booking_id;
+            }
+
+            // If cash payment, mark booking as completed and create enrollment
+            if (strpos($method, 'cash') === 0) {
+                $u = $conn->prepare("UPDATE bookings SET status = 'completed', payment_status = 'pending', payment_method = ? WHERE id = ? AND user_id = ?");
+                $u->bind_param('sii', $method, $booking_id, $student_id);
+                $u->execute();
+                $u->close();
+
+                // create enrollment
+                $en = $conn->prepare("INSERT INTO enrollments (student_id, class_id, enrollment_date, status, enrolled_at) VALUES (?, ?, NOW(), 'active', NOW())");
+                if ($en) {
+                    $en->bind_param('ii', $student_id, $pending['id']);
+                    $en->execute();
+                    $en->close();
+                }
+            }
+        }
+
+        if ($first_payment_booking) {
+            if ($method === 'paynow' || strpos($method, 'paynow_') === 0 || $method === 'ecocash') {
+                header('Location: /student/paynow_initiate.php?booking_id=' . $first_payment_booking);
+                exit();
+            }
+        }
+
+        $success_message = 'Payment(s) initiated. Follow instructions for your chosen method.';
     }
 }
 ?>
@@ -757,10 +774,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['initiate_payment'])) 
             </nav>
 
             <div class="logout-section">
-                <a href="logout.php" class="nav-link">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span class="nav-text">Logout</span>
-                </a>
+                <form method="post" action="logout.php" style="margin:0;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="nav-text">Logout</span>
+                    </button>
+                </form>
             </div>
         </aside>
 

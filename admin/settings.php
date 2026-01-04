@@ -638,12 +638,7 @@ if (!isset($business_hours['sunday'])) {
             <span class="nav-text">Payments</span>
           </a>
         </div>
-        <div class="nav-item">
-          <a href="analytics.php" class="nav-link">
-            <i class="bi bi-graph-up"></i>
-            <span class="nav-text">Analytics</span>
-          </a>
-        </div>
+        
         <div class="nav-item">
           <a href="settings.php" class="nav-link active">
             <i class="bi bi-gear"></i>

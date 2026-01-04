@@ -640,10 +640,12 @@ $cancelled_bookings = $conn->query("
             </nav>
 
             <div class="logout-section">
-                <a href="logout.php" class="nav-link">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span class="nav-text">Logout</span>
-                </a>
+                <form method="post" action="logout.php" style="margin:0;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="nav-text">Logout</span>
+                    </button>
+                </form>
             </div>
         </aside>
 

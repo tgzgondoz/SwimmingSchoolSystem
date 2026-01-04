@@ -1,5 +1,5 @@
 <?php
-// admin/students.php - Professional Students Management
+// admin/instructors.php - Professional Instructors Management
 session_start();
 require_once __DIR__ . '/../inc/db.php';
 require_once __DIR__ . '/../inc/functions.php';
@@ -27,46 +27,41 @@ if ($user_stmt) {
 
 // Handle form actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['add_student'])) {
+    if (isset($_POST['add_instructor'])) {
         $name = trim($_POST['name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
-        $age = isset($_POST['age']) && $_POST['age'] !== '' ? intval($_POST['age']) : null;
-        $emergency_contact = trim($_POST['emergency_contact'] ?? '');
-        $medical_notes = trim($_POST['medical_notes'] ?? '');
+        $specialization = trim($_POST['specialization'] ?? '');
+        $status = $_POST['status'] ?? 'active';
         
         // Validate required fields
         if (empty($name) || empty($email)) {
             $error_msg = "Name and email are required fields.";
         } else {
             // Check if email already exists
-            $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+            $check_stmt = $conn->prepare("SELECT id FROM instructors WHERE email = ?");
             $check_stmt->bind_param("s", $email);
             $check_stmt->execute();
             $check_stmt->store_result();
             
             if ($check_stmt->num_rows > 0) {
-                $error_msg = "A user with this email already exists!";
+                $error_msg = "An instructor with this email already exists!";
             } else {
-                // Generate a temporary password
-                $temp_password = bin2hex(random_bytes(8));
-                $hashed_password = password_hash($temp_password, PASSWORD_DEFAULT);
-                
                 // Prepare the insert statement
-                $stmt = $conn->prepare("INSERT INTO users (name, email, password, phone, age, emergency_contact, medical_notes, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'student', 'active', NOW())");
+                $stmt = $conn->prepare("INSERT INTO instructors (name, email, phone, specialization, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
                 if ($stmt === false) {
                     $error_msg = "Database error: " . $conn->error;
                 } else {
-                    $stmt->bind_param("ssssiss", $name, $email, $hashed_password, $phone, $age, $emergency_contact, $medical_notes);
+                    $stmt->bind_param("sssss", $name, $email, $phone, $specialization, $status);
                     
                     if ($stmt->execute()) {
-                        $student_id = $stmt->insert_id;
-                        $success_msg = "Student added successfully! Temporary password: " . $temp_password;
+                        $instructor_id = $stmt->insert_id;
+                        $success_msg = "Instructor added successfully!";
                         
                         // Log the activity
-                        logActivity($conn, $admin_id, 'Student Added', "Added student: $name (ID: $student_id)");
+                        logActivity($conn, $admin_id, 'Instructor Added', "Added instructor: $name (ID: $instructor_id)");
                     } else {
-                        $error_msg = "Failed to add student: " . $stmt->error;
+                        $error_msg = "Failed to add instructor: " . $stmt->error;
                     }
                     $stmt->close();
                 }
@@ -75,43 +70,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    elseif (isset($_POST['update_student'])) {
-        $student_id = intval($_POST['student_id'] ?? 0);
+    elseif (isset($_POST['update_instructor'])) {
+        $instructor_id = intval($_POST['instructor_id'] ?? 0);
         $name = trim($_POST['name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
-        $age = isset($_POST['age']) && $_POST['age'] !== '' ? intval($_POST['age']) : null;
-        $emergency_contact = trim($_POST['emergency_contact'] ?? '');
-        $medical_notes = trim($_POST['medical_notes'] ?? '');
+        $specialization = trim($_POST['specialization'] ?? '');
         $status = $_POST['status'] ?? 'active';
         
         // Validate required fields
-        if (empty($name) || empty($email) || $student_id <= 0) {
+        if (empty($name) || empty($email) || $instructor_id <= 0) {
             $error_msg = "Required fields are missing.";
         } else {
-            // Check if email already exists for another user
-            $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
-            $check_stmt->bind_param("si", $email, $student_id);
+            // Check if email already exists for another instructor
+            $check_stmt = $conn->prepare("SELECT id FROM instructors WHERE email = ? AND id != ?");
+            $check_stmt->bind_param("si", $email, $instructor_id);
             $check_stmt->execute();
             $check_stmt->store_result();
             
             if ($check_stmt->num_rows > 0) {
-                $error_msg = "A user with this email already exists!";
+                $error_msg = "An instructor with this email already exists!";
             } else {
                 // Prepare the update statement
-                $stmt = $conn->prepare("UPDATE users SET name = ?, email = ?, phone = ?, age = ?, emergency_contact = ?, medical_notes = ?, status = ?, updated_at = NOW() WHERE id = ? AND role = 'student'");
+                $stmt = $conn->prepare("UPDATE instructors SET name = ?, email = ?, phone = ?, specialization = ?, status = ? WHERE id = ?");
                 if ($stmt === false) {
                     $error_msg = "Database error: " . $conn->error;
                 } else {
-                    $stmt->bind_param("sssissii", $name, $email, $phone, $age, $emergency_contact, $medical_notes, $status, $student_id);
+                    $stmt->bind_param("sssssi", $name, $email, $phone, $specialization, $status, $instructor_id);
                     
                     if ($stmt->execute()) {
-                        $success_msg = "Student updated successfully!";
+                        $success_msg = "Instructor updated successfully!";
                         
                         // Log the activity
-                        logActivity($conn, $admin_id, 'Student Updated', "Updated student: $name (ID: $student_id)");
+                        logActivity($conn, $admin_id, 'Instructor Updated', "Updated instructor: $name (ID: $instructor_id)");
                     } else {
-                        $error_msg = "Failed to update student: " . $stmt->error;
+                        $error_msg = "Failed to update instructor: " . $stmt->error;
                     }
                     $stmt->close();
                 }
@@ -120,71 +113,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    elseif (isset($_POST['delete_student'])) {
-        $student_id = intval($_POST['student_id'] ?? 0);
+    elseif (isset($_POST['delete_instructor'])) {
+        $instructor_id = intval($_POST['instructor_id'] ?? 0);
         
-        if ($student_id <= 0) {
-            $error_msg = "Invalid student ID.";
+        if ($instructor_id <= 0) {
+            $error_msg = "Invalid instructor ID.";
         } else {
-            // Get student name for logging
-            $stmt = $conn->prepare("SELECT name FROM users WHERE id = ? AND role = 'student'");
-            $stmt->bind_param("i", $student_id);
-            $stmt->execute();
-            $stmt->bind_result($student_name);
-            $stmt->fetch();
-            $stmt->close();
-            // Remove dependent records safely to avoid FK constraint errors
-            $conn->begin_transaction();
-            try {
-                // 1) Delete payments for any bookings belonging to this student
-                $bk_select = $conn->prepare("SELECT id FROM bookings WHERE user_id = ?");
-                $bk_select->bind_param("i", $student_id);
-                $bk_select->execute();
-                $bk_result = $bk_select->get_result();
-                $booking_ids = [];
-                while ($row = $bk_result->fetch_assoc()) {
-                    $booking_ids[] = (int)$row['id'];
-                }
-                $bk_select->close();
-
-                if (!empty($booking_ids)) {
-                    $pay_del = $conn->prepare("DELETE FROM payments WHERE booking_id = ?");
-                    foreach ($booking_ids as $bid) {
-                        $pay_del->bind_param("i", $bid);
-                        $pay_del->execute();
+            // Check if instructor has assigned classes
+            $check_stmt = $conn->prepare("SELECT COUNT(*) as class_count FROM classes WHERE instructor_id = ?");
+            $check_stmt->bind_param("i", $instructor_id);
+            $check_stmt->execute();
+            $check_stmt->bind_result($class_count);
+            $check_stmt->fetch();
+            $check_stmt->close();
+            
+            if ($class_count > 0) {
+                $error_msg = "Cannot delete instructor. They have assigned classes. Please reassign or cancel the classes first.";
+            } else {
+                // Get instructor name for logging
+                $stmt = $conn->prepare("SELECT name FROM instructors WHERE id = ?");
+                $stmt->bind_param("i", $instructor_id);
+                $stmt->execute();
+                $stmt->bind_result($instructor_name);
+                $stmt->fetch();
+                $stmt->close();
+                
+                // Delete the instructor
+                $stmt = $conn->prepare("DELETE FROM instructors WHERE id = ?");
+                $stmt->bind_param("i", $instructor_id);
+                
+                if ($stmt->execute()) {
+                    if ($stmt->affected_rows > 0) {
+                        $success_msg = "Instructor deleted successfully!";
+                        
+                        // Log the activity
+                        logActivity($conn, $admin_id, 'Instructor Deleted', "Deleted instructor: $instructor_name (ID: $instructor_id)");
+                    } else {
+                        $error_msg = "Instructor not found or could not be deleted.";
                     }
-                    $pay_del->close();
-                }
-
-                // 2) Delete enrollments for this student
-                $en_del = $conn->prepare("DELETE FROM enrollments WHERE student_id = ?");
-                $en_del->bind_param("i", $student_id);
-                $en_del->execute();
-                $en_del->close();
-
-                // 3) Delete bookings for this student (after payments removed)
-                $bk_del = $conn->prepare("DELETE FROM bookings WHERE user_id = ?");
-                $bk_del->bind_param("i", $student_id);
-                $bk_del->execute();
-                $bk_del->close();
-
-                // 4) Delete the student user
-                $del_user = $conn->prepare("DELETE FROM users WHERE id = ? AND role = 'student'");
-                $del_user->bind_param("i", $student_id);
-                $del_user->execute();
-
-                if ($del_user->affected_rows > 0) {
-                    $success_msg = "Student deleted successfully!";
-                    logActivity($conn, $admin_id, 'Student Deleted', "Deleted student: $student_name (ID: $student_id)");
                 } else {
-                    throw new Exception('Student not found or could not be deleted.');
+                    $error_msg = "Database error: " . $stmt->error;
                 }
-
-                $del_user->close();
-                $conn->commit();
-            } catch (Exception $e) {
-                $conn->rollback();
-                $error_msg = "Failed to delete student and related data: " . $e->getMessage();
+                $stmt->close();
             }
         }
     }
@@ -198,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     // Redirect to prevent form resubmission
-    header("Location: students.php");
+    header("Location: instructors.php");
     exit();
 }
 
@@ -215,23 +185,24 @@ if (isset($_SESSION['error_msg'])) {
 // Handle filtering and searching
 $search = $_GET['search'] ?? '';
 $status_filter = $_GET['status'] ?? 'all';
-$class_filter = $_GET['class_filter'] ?? 'all';
+$specialization_filter = $_GET['specialization'] ?? 'all';
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
 $limit = 15;
 $offset = ($page - 1) * $limit;
 
 // Build WHERE clause
-$where_conditions = ["role = 'student'"];
+$where_conditions = ["1=1"];
 $params = [];
 $param_types = '';
 
 if (!empty($search)) {
-    $where_conditions[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ?)";
+    $where_conditions[] = "(name LIKE ? OR email LIKE ? OR phone LIKE ? OR specialization LIKE ?)";
     $search_param = "%$search%";
     $params[] = $search_param;
     $params[] = $search_param;
     $params[] = $search_param;
-    $param_types .= 'sss';
+    $params[] = $search_param;
+    $param_types .= 'ssss';
 }
 
 if ($status_filter !== 'all') {
@@ -240,10 +211,25 @@ if ($status_filter !== 'all') {
     $param_types .= 's';
 }
 
-// Get students with pagination
+if ($specialization_filter !== 'all' && !empty($specialization_filter)) {
+    $where_conditions[] = "specialization = ?";
+    $params[] = $specialization_filter;
+    $param_types .= 's';
+}
+
+// Get instructors with pagination
 try {
     // Build SQL query
-    $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM users WHERE " . implode(' AND ', $where_conditions) . " ORDER BY name ASC LIMIT ? OFFSET ?";
+    $sql = "SELECT SQL_CALC_FOUND_ROWS i.*, 
+                   (SELECT COUNT(*) FROM classes WHERE instructor_id = i.id) as total_classes,
+                   (SELECT COUNT(DISTINCT b.id) FROM classes c 
+                    LEFT JOIN bookings b ON c.id = b.class_id 
+                    WHERE c.instructor_id = i.id AND b.status = 'confirmed') as total_bookings
+            FROM instructors i 
+            WHERE " . implode(' AND ', $where_conditions) . " 
+            ORDER BY name ASC 
+            LIMIT ? OFFSET ?";
+    
     $params[] = $limit;
     $params[] = $offset;
     $param_types .= 'ii';
@@ -253,60 +239,51 @@ try {
         $stmt->bind_param($param_types, ...$params);
     }
     $stmt->execute();
-    $students_result = $stmt->get_result();
-    $students = $students_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $instructors_result = $stmt->get_result();
+    $instructors = $instructors_result->fetch_all(MYSQLI_ASSOC) ?: [];
     $stmt->close();
     
     // Get total count for pagination
     $total_result = $conn->query("SELECT FOUND_ROWS() as total");
-    $total_students = $total_result->fetch_assoc()['total'];
-    $total_pages = ceil($total_students / $limit);
+    $total_instructors = $total_result->fetch_assoc()['total'];
+    $total_pages = ceil($total_instructors / $limit);
     
-    // Get student statistics
-    $total_students_all = $conn->query("SELECT COUNT(*) as total FROM users WHERE role = 'student'")->fetch_assoc()['total'];
-    $active_students = $conn->query("SELECT COUNT(*) as total FROM users WHERE role = 'student' AND status = 'active'")->fetch_assoc()['total'];
-    $inactive_students = $conn->query("SELECT COUNT(*) as total FROM users WHERE role = 'student' AND status = 'inactive'")->fetch_assoc()['total'];
-    $new_this_month = $conn->query("SELECT COUNT(*) as total FROM users WHERE role = 'student' AND MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())")->fetch_assoc()['total'];
+    // Get instructor statistics
+    $total_instructors_all = $conn->query("SELECT COUNT(*) as total FROM instructors")->fetch_assoc()['total'];
+    $active_instructors = $conn->query("SELECT COUNT(*) as total FROM instructors WHERE status = 'active'")->fetch_assoc()['total'];
+    $inactive_instructors = $conn->query("SELECT COUNT(*) as total FROM instructors WHERE status = 'inactive'")->fetch_assoc()['total'];
+    $new_this_month = $conn->query("SELECT COUNT(*) as total FROM instructors WHERE MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())")->fetch_assoc()['total'];
     
-    // Get all classes for filter
-    $classes = $conn->query("SELECT id, title FROM classes WHERE start_time >= NOW() ORDER BY title ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
+    // Get total classes taught
+    $total_classes_taught = $conn->query("SELECT COUNT(*) as total FROM classes WHERE instructor_id IS NOT NULL")->fetch_assoc()['total'];
     
-    // Get enrolled students count
-    $enrolled_stmt = $conn->prepare("
-        SELECT COUNT(DISTINCT u.id) as total 
-        FROM users u 
-        INNER JOIN bookings b ON u.id = b.user_id 
-        WHERE u.role = 'student' 
-        AND b.status = 'confirmed'
+    // Get specialization list
+    $specializations_result = $conn->query("SELECT DISTINCT specialization FROM instructors WHERE specialization IS NOT NULL AND specialization != '' ORDER BY specialization ASC");
+    $specializations = $specializations_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    
+    // Get top instructors by bookings
+    $top_instructors_stmt = $conn->prepare("
+        SELECT i.name, i.specialization, 
+               COUNT(DISTINCT b.id) as booking_count,
+               COUNT(DISTINCT c.id) as class_count
+        FROM instructors i
+        LEFT JOIN classes c ON i.id = c.instructor_id
+        LEFT JOIN bookings b ON c.id = b.class_id AND b.status = 'confirmed'
+        WHERE i.status = 'active'
+        GROUP BY i.id
+        ORDER BY booking_count DESC
+        LIMIT 5
     ");
-    $enrolled_stmt->execute();
-    $enrolled_result = $enrolled_stmt->get_result();
-    $enrolled_students = $enrolled_result->fetch_assoc()['total'] ?? 0;
-    $enrolled_stmt->close();
+    $top_instructors_stmt->execute();
+    $top_instructors_result = $top_instructors_stmt->get_result();
+    $top_instructors = $top_instructors_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $top_instructors_stmt->close();
     
-    // Get age distribution
-    $age_distribution_stmt = $conn->prepare("
-        SELECT 
-            SUM(CASE WHEN age < 6 THEN 1 ELSE 0 END) as toddlers,
-            SUM(CASE WHEN age BETWEEN 6 AND 12 THEN 1 ELSE 0 END) as children,
-            SUM(CASE WHEN age BETWEEN 13 AND 17 THEN 1 ELSE 0 END) as teens,
-            SUM(CASE WHEN age >= 18 THEN 1 ELSE 0 END) as adults,
-            SUM(CASE WHEN age IS NULL THEN 1 ELSE 0 END) as unknown
-        FROM users 
-        WHERE role = 'student'
-    ");
-    $age_distribution_stmt->execute();
-    $age_distribution_result = $age_distribution_stmt->get_result();
-    $age_distribution = $age_distribution_result->fetch_assoc() ?: [
-        'toddlers' => 0, 'children' => 0, 'teens' => 0, 'adults' => 0, 'unknown' => 0
-    ];
-    $age_distribution_stmt->close();
-    
-    // Get student growth this month
+    // Get instructor growth this month
     $growth_stmt = $conn->prepare("
         SELECT 
-            (SELECT COUNT(*) FROM users WHERE role = 'student' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) as new_this_month,
-            (SELECT COUNT(*) FROM users WHERE role = 'student' AND created_at < DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) as previous_total
+            (SELECT COUNT(*) FROM instructors WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) as new_this_month,
+            (SELECT COUNT(*) FROM instructors WHERE created_at < DATE_SUB(CURDATE(), INTERVAL 1 MONTH)) as previous_total
     ");
     $growth_stmt->execute();
     $growth_result = $growth_stmt->get_result();
@@ -318,15 +295,15 @@ try {
         ($growth['new_this_month'] > 0 ? 100 : 0);
         
 } catch (Exception $e) {
-    error_log("Students query error: " . $e->getMessage());
-    $students = [];
-    $total_students = 0;
+    error_log("Instructors query error: " . $e->getMessage());
+    $instructors = [];
+    $total_instructors = 0;
     $total_pages = 0;
-    $total_students_all = $active_students = $inactive_students = $new_this_month = $enrolled_students = 0;
-    $age_distribution = ['toddlers' => 0, 'children' => 0, 'teens' => 0, 'adults' => 0, 'unknown' => 0];
+    $total_instructors_all = $active_instructors = $inactive_instructors = $new_this_month = $total_classes_taught = 0;
+    $specializations = [];
+    $top_instructors = [];
     $growth_percentage = 0;
-    $classes = [];
-    $error_msg = $error_msg ?: "Unable to load student data. Please try again later.";
+    $error_msg = $error_msg ?: "Unable to load instructor data. Please try again later.";
 }
 
 // Get current date and time
@@ -337,7 +314,7 @@ $current_date = date('l, F j, Y');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Students | Elite Swimming Academy</title>
+    <title>Manage Instructors | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -735,11 +712,11 @@ $current_date = date('l, F j, Y');
             background: #f8f9fa;
         }
         
-        /* Student Avatar */
-        .student-avatar {
+        /* Instructor Avatar */
+        .instructor-avatar {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -765,6 +742,16 @@ $current_date = date('l, F j, Y');
         .badge-danger {
             background: rgba(220, 53, 69, 0.1);
             color: var(--danger);
+        }
+        
+        .badge-info {
+            background: rgba(13, 202, 240, 0.1);
+            color: var(--info);
+        }
+        
+        .badge-warning {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning);
         }
         
         .badge-secondary {
@@ -837,30 +824,92 @@ $current_date = date('l, F j, Y');
             color: white;
         }
         
-        /* Age Distribution */
-        .age-distribution {
+        /* Top Instructors */
+        .top-instructors {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            margin-bottom: 30px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .top-instructors-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .top-instructors-header h4 {
+            font-weight: 600;
+            margin: 0;
+            color: var(--dark);
+        }
+        
+        .instructor-rankings {
             display: flex;
             flex-direction: column;
             gap: 15px;
-            margin-top: 20px;
         }
         
-        .age-item {
+        .ranking-item {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 10px 15px;
+            padding: 15px;
             background: #f8f9fa;
-            border-radius: 8px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
         }
         
-        .age-label {
-            font-weight: 500;
-            color: #495057;
+        .ranking-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
         }
         
-        .age-count {
+        .rank-number {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
             font-weight: 600;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        
+        .ranking-info {
+            flex: 1;
+        }
+        
+        .ranking-info h6 {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--dark);
+        }
+        
+        .ranking-info p {
+            font-size: 13px;
+            color: #6c757d;
+            margin: 0;
+        }
+        
+        .ranking-stats {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+        }
+        
+        .ranking-stat {
+            text-align: center;
+        }
+        
+        .ranking-stat span {
+            display: block;
+            font-weight: 700;
             color: var(--primary);
         }
         
@@ -959,6 +1008,21 @@ $current_date = date('l, F j, Y');
                 flex-wrap: wrap;
                 justify-content: center;
             }
+            
+            .ranking-item {
+                flex-direction: column;
+                text-align: center;
+                gap: 10px;
+            }
+            
+            .rank-number {
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            
+            .ranking-stats {
+                justify-content: center;
+            }
         }
         
         @media (max-width: 576px) {
@@ -996,13 +1060,13 @@ $current_date = date('l, F j, Y');
                     </a>
                 </div>
                 <div class="nav-item">
-                    <a href="students.php" class="nav-link active">
+                    <a href="students.php" class="nav-link">
                         <i class="bi bi-people"></i>
                         <span class="nav-text">Students</span>
                     </a>
                 </div>
                 <div class="nav-item">
-                    <a href="instructors.php" class="nav-link">
+                    <a href="instructors.php" class="nav-link active">
                         <i class="bi bi-person-badge"></i>
                         <span class="nav-text">Instructors</span>
                     </a>
@@ -1048,8 +1112,8 @@ $current_date = date('l, F j, Y');
             <!-- Header -->
             <header class="header fade-in">
                 <div class="header-left">
-                    <h1>Manage Students</h1>
-                    <p>Total Students: <?= $total_students_all ?> • <?= $current_date ?></p>
+                    <h1>Manage Instructors</h1>
+                    <p>Total Instructors: <?= $total_instructors_all ?> • <?= $current_date ?></p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
@@ -1083,11 +1147,11 @@ $current_date = date('l, F j, Y');
             <div class="stats-grid fade-in">
                 <div class="stat-card">
                     <div class="stat-icon">
-                        <i class="bi bi-people"></i>
+                        <i class="bi bi-person-badge"></i>
                     </div>
                     <div class="stat-content">
-                        <h3><?= $total_students_all ?></h3>
-                        <p>Total Students</p>
+                        <h3><?= $total_instructors_all ?></h3>
+                        <p>Total Instructors</p>
                         <div class="stat-trend">
                             <i class="bi bi-arrow-up <?= $growth_percentage >= 0 ? 'trend-up' : 'trend-down' ?>"></i>
                             <span><?= abs($growth_percentage) ?>% this month</span>
@@ -1100,80 +1164,85 @@ $current_date = date('l, F j, Y');
                         <i class="bi bi-person-check"></i>
                     </div>
                     <div class="stat-content">
-                        <h3><?= $active_students ?></h3>
-                        <p>Active Students</p>
+                        <h3><?= $active_instructors ?></h3>
+                        <p>Active Instructors</p>
                         <div class="stat-trend">
-                            <span><?= round(($active_students / max($total_students_all, 1)) * 100) ?>% of total</span>
+                            <span><?= round(($active_instructors / max($total_instructors_all, 1)) * 100) ?>% of total</span>
                         </div>
                     </div>
                 </div>
                 
                 <div class="stat-card">
                     <div class="stat-icon">
-                        <i class="bi bi-person-plus"></i>
+                        <i class="bi bi-calendar-week"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?= $total_classes_taught ?></h3>
+                        <p>Total Classes Taught</p>
+                        <div class="stat-trend">
+                            <span>All-time classes</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="bi bi-arrow-up-right-circle"></i>
                     </div>
                     <div class="stat-content">
                         <h3><?= $new_this_month ?></h3>
                         <p>New This Month</p>
                         <div class="stat-trend">
-                            <span>Recent signups</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="stat-card">
-                    <div class="stat-icon">
-                        <i class="bi bi-journal-check"></i>
-                    </div>
-                    <div class="stat-content">
-                        <h3><?= $enrolled_students ?></h3>
-                        <p>Currently Enrolled</p>
-                        <div class="stat-trend">
-                            <span>Active class bookings</span>
+                            <span>Recent hires</span>
                         </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Age Distribution -->
-            <div class="filter-section fade-in">
-                <h4 class="mb-4">Student Age Distribution</h4>
-                <div class="age-distribution">
-                    <div class="age-item">
-                        <span class="age-label">Toddlers (0-5 years)</span>
-                        <span class="age-count"><?= $age_distribution['toddlers'] ?></span>
+            <!-- Top Instructors -->
+            <?php if (!empty($top_instructors)): ?>
+                <div class="top-instructors fade-in">
+                    <div class="top-instructors-header">
+                        <h4>Top Instructors</h4>
+                        <span class="text-muted">By Booking Count</span>
                     </div>
-                    <div class="age-item">
-                        <span class="age-label">Children (6-12 years)</span>
-                        <span class="age-count"><?= $age_distribution['children'] ?></span>
-                    </div>
-                    <div class="age-item">
-                        <span class="age-label">Teens (13-17 years)</span>
-                        <span class="age-count"><?= $age_distribution['teens'] ?></span>
-                    </div>
-                    <div class="age-item">
-                        <span class="age-label">Adults (18+ years)</span>
-                        <span class="age-count"><?= $age_distribution['adults'] ?></span>
-                    </div>
-                    <div class="age-item">
-                        <span class="age-label">Age Not Specified</span>
-                        <span class="age-count"><?= $age_distribution['unknown'] ?></span>
+                    <div class="instructor-rankings">
+                        <?php $rank = 1; ?>
+                        <?php foreach ($top_instructors as $instructor): ?>
+                            <div class="ranking-item">
+                                <div class="rank-number"><?= $rank++ ?></div>
+                                <div class="ranking-info">
+                                    <h6><?= htmlspecialchars($instructor['name']) ?></h6>
+                                    <p><?= htmlspecialchars($instructor['specialization'] ?? 'General') ?></p>
+                                </div>
+                                <div class="ranking-stats">
+                                    <div class="ranking-stat">
+                                        <span><?= $instructor['booking_count'] ?></span>
+                                        <small>Bookings</small>
+                                    </div>
+                                    <div class="ranking-stat">
+                                        <span><?= $instructor['class_count'] ?></span>
+                                        <small>Classes</small>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
-            </div>
+            <?php endif; ?>
             
             <!-- Filter Section -->
             <div class="filter-section fade-in">
                 <div class="filter-header">
-                    <h3>Filter Students</h3>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal">
-                        <i class="bi bi-plus-circle me-2"></i> Add Student
+                    <h3>Filter Instructors</h3>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addInstructorModal">
+                        <i class="bi bi-plus-circle me-2"></i> Add Instructor
                     </button>
                 </div>
                 <form method="GET" class="filter-grid">
                     <div class="form-group">
                         <label>Search</label>
-                        <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Name, email, or phone...">
+                        <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Name, email, phone, or specialization...">
                     </div>
                     <div class="form-group">
                         <label>Status</label>
@@ -1184,12 +1253,12 @@ $current_date = date('l, F j, Y');
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Class</label>
-                        <select class="form-select" name="class_filter">
-                            <option value="all" <?= $class_filter === 'all' ? 'selected' : '' ?>>All Classes</option>
-                            <?php foreach ($classes as $class): ?>
-                                <option value="<?= $class['id'] ?>" <?= $class_filter == $class['id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($class['title']) ?>
+                        <label>Specialization</label>
+                        <select class="form-select" name="specialization">
+                            <option value="all" <?= $specialization_filter === 'all' ? 'selected' : '' ?>>All Specializations</option>
+                            <?php foreach ($specializations as $spec): ?>
+                                <option value="<?= htmlspecialchars($spec['specialization']) ?>" <?= $specialization_filter == $spec['specialization'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($spec['specialization']) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -1202,89 +1271,100 @@ $current_date = date('l, F j, Y');
                 </form>
             </div>
             
-            <!-- Students Table -->
+            <!-- Instructors Table -->
             <div class="table-container fade-in">
                 <div class="table-header">
-                    <h3>Student Directory</h3>
+                    <h3>Instructor Directory</h3>
                     <div>
-                        <span class="text-muted">Showing <?= count($students) ?> of <?= $total_students ?> students</span>
+                        <span class="text-muted">Showing <?= count($instructors) ?> of <?= $total_instructors ?> instructors</span>
                     </div>
                 </div>
                 
                 <div class="table-wrapper">
-                    <?php if (empty($students)): ?>
+                    <?php if (empty($instructors)): ?>
                         <div class="empty-state">
-                            <i class="bi bi-people"></i>
-                            <h4>No Students Found</h4>
-                            <p>No students match your search criteria. Try adjusting your filters.</p>
-                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal">
-                                <i class="bi bi-plus-circle me-2"></i> Add New Student
+                            <i class="bi bi-person-badge"></i>
+                            <h4>No Instructors Found</h4>
+                            <p>No instructors match your search criteria. Try adjusting your filters.</p>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addInstructorModal">
+                                <i class="bi bi-plus-circle me-2"></i> Add New Instructor
                             </button>
                         </div>
                     <?php else: ?>
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Student</th>
+                                    <th>Instructor</th>
                                     <th>Contact Info</th>
-                                    <th>Age</th>
+                                    <th>Specialization</th>
+                                    <th>Classes/Bookings</th>
                                     <th>Status</th>
-                                    <th>Member Since</th>
+                                    <th>Joined</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($students as $student): ?>
+                                <?php foreach ($instructors as $instructor): ?>
                                     <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="student-avatar me-3">
-                                                    <?= strtoupper(substr($student['name'], 0, 1)) ?>
+                                                <div class="instructor-avatar me-3">
+                                                    <?= strtoupper(substr($instructor['name'], 0, 1)) ?>
                                                 </div>
                                                 <div>
-                                                    <div class="fw-semibold"><?= htmlspecialchars($student['name']) ?></div>
-                                                    <small class="text-muted">ID: <?= $student['id'] ?></small>
+                                                    <div class="fw-semibold"><?= htmlspecialchars($instructor['name']) ?></div>
+                                                    <small class="text-muted">ID: <?= $instructor['id'] ?></small>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="fw-medium"><?= htmlspecialchars($student['email']) ?></div>
-                                            <?php if ($student['phone']): ?>
-                                                <small class="text-muted"><?= htmlspecialchars($student['phone']) ?></small>
+                                            <div class="fw-medium"><?= htmlspecialchars($instructor['email']) ?></div>
+                                            <?php if ($instructor['phone']): ?>
+                                                <small class="text-muted"><?= htmlspecialchars($instructor['phone']) ?></small>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <?php if ($student['age']): ?>
-                                                <span class="badge badge-secondary"><?= $student['age'] ?> years</span>
+                                            <?php if ($instructor['specialization']): ?>
+                                                <span class="badge badge-info"><?= htmlspecialchars($instructor['specialization']) ?></span>
                                             <?php else: ?>
-                                                <span class="badge badge-secondary">N/A</span>
+                                                <span class="badge badge-secondary">General</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <span class="badge <?= $student['status'] === 'active' ? 'badge-success' : 'badge-danger' ?>">
-                                                <?= ucfirst($student['status']) ?>
+                                            <div class="d-flex gap-2">
+                                                <span class="badge badge-warning" title="Classes Taught">
+                                                    <i class="bi bi-calendar-week me-1"></i><?= $instructor['total_classes'] ?>
+                                                </span>
+                                                <span class="badge badge-success" title="Total Bookings">
+                                                    <i class="bi bi-journal-check me-1"></i><?= $instructor['total_bookings'] ?>
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge <?= $instructor['status'] === 'active' ? 'badge-success' : 'badge-danger' ?>">
+                                                <?= ucfirst($instructor['status']) ?>
                                             </span>
                                         </td>
                                         <td>
-                                            <?= date('M j, Y', strtotime($student['created_at'])) ?>
+                                            <?= date('M j, Y', strtotime($instructor['created_at'])) ?>
                                         </td>
                                         <td>
                                             <div class="action-buttons">
                                                 <button class="btn btn-outline-primary btn-sm btn-icon" 
-                                                        data-bs-toggle="modal" data-bs-target="#viewStudentModal"
-                                                        onclick="viewStudent(<?= htmlspecialchars(json_encode($student)) ?>)"
+                                                        data-bs-toggle="modal" data-bs-target="#viewInstructorModal"
+                                                        onclick="viewInstructor(<?= htmlspecialchars(json_encode($instructor)) ?>)"
                                                         title="View Details">
                                                     <i class="bi bi-eye"></i>
                                                 </button>
                                                 <button class="btn btn-outline-primary btn-sm btn-icon" 
-                                                        data-bs-toggle="modal" data-bs-target="#editStudentModal"
-                                                        onclick="editStudent(<?= htmlspecialchars(json_encode($student)) ?>)"
-                                                        title="Edit Student">
+                                                        data-bs-toggle="modal" data-bs-target="#editInstructorModal"
+                                                        onclick="editInstructor(<?= htmlspecialchars(json_encode($instructor)) ?>)"
+                                                        title="Edit Instructor">
                                                     <i class="bi bi-pencil"></i>
                                                 </button>
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this student? This action cannot be undone.');">
-                                                    <input type="hidden" name="student_id" value="<?= $student['id'] ?>">
-                                                    <button type="submit" name="delete_student" class="btn btn-outline-danger btn-sm btn-icon" title="Delete Student">
+                                                <form method="POST" class="d-inline" onsubmit="return confirmDeleteInstructor(<?= $instructor['total_classes'] ?>);">
+                                                    <input type="hidden" name="instructor_id" value="<?= $instructor['id'] ?>">
+                                                    <button type="submit" name="delete_instructor" class="btn btn-outline-danger btn-sm btn-icon" title="Delete Instructor">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </form>
@@ -1339,15 +1419,15 @@ $current_date = date('l, F j, Y');
         </main>
     </div>
     
-    <!-- Add Student Modal -->
-    <div class="modal fade" id="addStudentModal" tabindex="-1">
+    <!-- Add Instructor Modal -->
+    <div class="modal fade" id="addInstructorModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Student</h5>
+                    <h5 class="modal-title">Add New Instructor</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" id="addStudentForm">
+                <form method="POST" id="addInstructorForm">
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -1363,44 +1443,37 @@ $current_date = date('l, F j, Y');
                                 <input type="tel" class="form-control" name="phone" maxlength="20" placeholder="+263 77 123 4567">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Age</label>
-                                <input type="number" class="form-control" name="age" min="1" max="100" placeholder="Optional">
+                                <label class="form-label">Specialization</label>
+                                <input type="text" class="form-control" name="specialization" maxlength="100" placeholder="e.g., Beginner Swimming, Advanced Techniques">
                             </div>
-                            <div class="col-12">
-                                <label class="form-label">Emergency Contact</label>
-                                <input type="text" class="form-control" name="emergency_contact" maxlength="100" placeholder="Name and phone number">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Medical Notes</label>
-                                <textarea class="form-control" name="medical_notes" rows="3" placeholder="Any medical conditions, allergies, or special requirements..."></textarea>
-                            </div>
-                            <div class="col-12">
-                                <div class="alert alert-info">
-                                    <i class="bi bi-info-circle me-2"></i>
-                                    A temporary password will be generated and shown upon successful student creation.
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status">
+                                    <option value="active" selected>Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="add_student" class="btn btn-primary">Add Student</button>
+                        <button type="submit" name="add_instructor" class="btn btn-primary">Add Instructor</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
     
-    <!-- Edit Student Modal -->
-    <div class="modal fade" id="editStudentModal" tabindex="-1">
+    <!-- Edit Instructor Modal -->
+    <div class="modal fade" id="editInstructorModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Edit Student</h5>
+                    <h5 class="modal-title">Edit Instructor</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form method="POST" id="editStudentForm">
-                    <input type="hidden" name="student_id" id="edit_student_id">
+                <form method="POST" id="editInstructorForm">
+                    <input type="hidden" name="instructor_id" id="edit_instructor_id">
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-md-6">
@@ -1416,8 +1489,8 @@ $current_date = date('l, F j, Y');
                                 <input type="tel" class="form-control" name="phone" id="edit_phone" maxlength="20">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Age</label>
-                                <input type="number" class="form-control" name="age" id="edit_age" min="1" max="100">
+                                <label class="form-label">Specialization</label>
+                                <input type="text" class="form-control" name="specialization" id="edit_specialization" maxlength="100">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Status</label>
@@ -1426,31 +1499,23 @@ $current_date = date('l, F j, Y');
                                     <option value="inactive">Inactive</option>
                                 </select>
                             </div>
-                            <div class="col-12">
-                                <label class="form-label">Emergency Contact</label>
-                                <input type="text" class="form-control" name="emergency_contact" id="edit_emergency_contact" maxlength="100">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Medical Notes</label>
-                                <textarea class="form-control" name="medical_notes" id="edit_medical_notes" rows="3"></textarea>
-                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_student" class="btn btn-primary">Update Student</button>
+                        <button type="submit" name="update_instructor" class="btn btn-primary">Update Instructor</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
     
-    <!-- View Student Modal -->
-    <div class="modal fade" id="viewStudentModal" tabindex="-1">
+    <!-- View Instructor Modal -->
+    <div class="modal fade" id="viewInstructorModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Student Details</h5>
+                    <h5 class="modal-title">Instructor Details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -1468,8 +1533,8 @@ $current_date = date('l, F j, Y');
                             <p id="view_phone"></p>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label text-muted">Age</label>
-                            <p id="view_age"></p>
+                            <label class="form-label text-muted">Specialization</label>
+                            <p id="view_specialization"></p>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label text-muted">Status</label>
@@ -1479,15 +1544,13 @@ $current_date = date('l, F j, Y');
                             <label class="form-label text-muted">Member Since</label>
                             <p id="view_created_at"></p>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label text-muted">Emergency Contact</label>
-                            <p id="view_emergency_contact"></p>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Total Classes</label>
+                            <p id="view_total_classes" class="fw-semibold"></p>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label text-muted">Medical Notes</label>
-                            <div class="border rounded p-3 bg-light">
-                                <p id="view_medical_notes" class="mb-0"></p>
-                            </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Total Bookings</label>
+                            <p id="view_total_bookings" class="fw-semibold"></p>
                         </div>
                     </div>
                 </div>
@@ -1501,40 +1564,47 @@ $current_date = date('l, F j, Y');
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Edit student function
-            window.editStudent = function(student) {
-                document.getElementById('edit_student_id').value = student.id;
-                document.getElementById('edit_name').value = student.name;
-                document.getElementById('edit_email').value = student.email;
-                document.getElementById('edit_phone').value = student.phone || '';
-                document.getElementById('edit_age').value = student.age || '';
-                document.getElementById('edit_status').value = student.status || 'active';
-                document.getElementById('edit_emergency_contact').value = student.emergency_contact || '';
-                document.getElementById('edit_medical_notes').value = student.medical_notes || '';
+            // Edit instructor function
+            window.editInstructor = function(instructor) {
+                document.getElementById('edit_instructor_id').value = instructor.id;
+                document.getElementById('edit_name').value = instructor.name;
+                document.getElementById('edit_email').value = instructor.email;
+                document.getElementById('edit_phone').value = instructor.phone || '';
+                document.getElementById('edit_specialization').value = instructor.specialization || '';
+                document.getElementById('edit_status').value = instructor.status || 'active';
             }
             
-            // View student function
-            window.viewStudent = function(student) {
-                document.getElementById('view_name').textContent = student.name;
-                document.getElementById('view_email').textContent = student.email;
-                document.getElementById('view_phone').textContent = student.phone || 'Not provided';
-                document.getElementById('view_age').textContent = student.age ? student.age + ' years' : 'Not provided';
-                document.getElementById('view_status').innerHTML = student.status === 'active' 
+            // View instructor function
+            window.viewInstructor = function(instructor) {
+                document.getElementById('view_name').textContent = instructor.name;
+                document.getElementById('view_email').textContent = instructor.email;
+                document.getElementById('view_phone').textContent = instructor.phone || 'Not provided';
+                document.getElementById('view_specialization').textContent = instructor.specialization || 'General';
+                document.getElementById('view_status').innerHTML = instructor.status === 'active' 
                     ? '<span class="badge badge-success">Active</span>' 
                     : '<span class="badge badge-danger">Inactive</span>';
-                document.getElementById('view_created_at').textContent = student.created_at ? 
-                    new Date(student.created_at).toLocaleDateString('en-US', {
+                document.getElementById('view_created_at').textContent = instructor.created_at ? 
+                    new Date(instructor.created_at).toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'long',
                         day: 'numeric'
                     }) : 'N/A';
-                document.getElementById('view_emergency_contact').textContent = student.emergency_contact || 'Not provided';
-                document.getElementById('view_medical_notes').textContent = student.medical_notes || 'None';
+                document.getElementById('view_total_classes').textContent = instructor.total_classes || '0';
+                document.getElementById('view_total_bookings').textContent = instructor.total_bookings || '0';
+            }
+            
+            // Confirm delete with class assignment check
+            window.confirmDeleteInstructor = function(classCount) {
+                if (classCount > 0) {
+                    alert('Cannot delete instructor. They have assigned classes. Please reassign or cancel the classes first.');
+                    return false;
+                }
+                return confirm('Are you sure you want to delete this instructor? This action cannot be undone.');
             }
             
             // Form validation
-            const addForm = document.getElementById('addStudentForm');
-            const editForm = document.getElementById('editStudentForm');
+            const addForm = document.getElementById('addInstructorForm');
+            const editForm = document.getElementById('editInstructorForm');
             
             if (addForm) {
                 addForm.addEventListener('submit', function(e) {
@@ -1618,6 +1688,14 @@ $current_date = date('l, F j, Y');
                     bsAlert.close();
                 }, 5000);
             });
+            
+            // Update specialization filter options
+            const specializationSelect = document.querySelector('select[name="specialization"]');
+            if (specializationSelect) {
+                const currentValue = specializationSelect.value;
+                // This would typically be populated from an API call
+                // For now, we'll keep it as is since we're loading from PHP
+            }
         });
     </script>
 </body>

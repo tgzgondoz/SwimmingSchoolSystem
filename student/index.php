@@ -1,163 +1,264 @@
 <?php
-// student/index.php - Professional Student Dashboard (Fixed)
+// student/index.php - Professional Student Dashboard
 session_start();
-include __DIR__ . '/../inc/db.php';
-include __DIR__ . '/../inc/functions.php';
+require_once __DIR__ . '/../inc/db.php';
+require_once __DIR__ . '/../inc/functions.php';
 
-requireRole('student');
-$user = getCurrentUser($conn);
+// Authentication and role check
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
+    header('Location: ../login.php');
+    exit();
+}
+
 $student_id = $_SESSION['user_id'];
+$success_msg = '';
+$error_msg = '';
 
-// Get student statistics
-$total_bookings = $conn->query("SELECT COUNT(*) as total FROM bookings WHERE user_id = $student_id")->fetch_assoc()['total'];
-$upcoming_classes = $conn->query("SELECT COUNT(*) as total FROM bookings b JOIN classes c ON b.class_id = c.id WHERE b.user_id = $student_id AND c.start_time >= NOW() AND b.status = 'confirmed'")->fetch_assoc()['total'];
-$completed_classes = $conn->query("SELECT COUNT(*) as total FROM bookings b JOIN classes c ON b.class_id = c.id WHERE b.user_id = $student_id AND c.end_time < NOW() AND b.status = 'confirmed'")->fetch_assoc()['total'];
-$total_payments = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE user_id = $student_id AND status = 'paid'")->fetch_assoc()['total'];
+// Get student statistics with proper error handling
+try {
+    // Total bookings
+    $total_bookings_stmt = $conn->prepare("SELECT COUNT(*) as total FROM bookings WHERE user_id = ?");
+    $total_bookings_stmt->bind_param("i", $student_id);
+    $total_bookings_stmt->execute();
+    $total_bookings_result = $total_bookings_stmt->get_result();
+    $total_bookings = $total_bookings_result->fetch_assoc()['total'] ?? 0;
+    $total_bookings_stmt->close();
 
-// Get upcoming classes
-$upcoming_classes_list = $conn->query("
-    SELECT c.*, i.name as instructor_name, b.status as booking_status
-    FROM bookings b
-    JOIN classes c ON b.class_id = c.id
-    LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE b.user_id = $student_id AND c.start_time >= NOW() AND b.status = 'confirmed'
-    ORDER BY c.start_time ASC
-    LIMIT 5
-")->fetch_all(MYSQLI_ASSOC);
+    // Upcoming classes
+    $upcoming_classes_stmt = $conn->prepare("
+        SELECT COUNT(*) as total 
+        FROM bookings b 
+        JOIN classes c ON b.class_id = c.id 
+        WHERE b.user_id = ? 
+        AND c.start_time >= NOW() 
+        AND b.status = 'confirmed'
+    ");
+    $upcoming_classes_stmt->bind_param("i", $student_id);
+    $upcoming_classes_stmt->execute();
+    $upcoming_classes_result = $upcoming_classes_stmt->get_result();
+    $upcoming_classes = $upcoming_classes_result->fetch_assoc()['total'] ?? 0;
+    $upcoming_classes_stmt->close();
 
-// Get recent payments
-$recent_payments = $conn->query("
-    SELECT * FROM payments 
-    WHERE user_id = $student_id 
-    ORDER BY payment_date DESC 
-    LIMIT 5
-")->fetch_all(MYSQLI_ASSOC);
+    // Completed classes (classes that have ended)
+    $completed_classes_stmt = $conn->prepare("
+        SELECT COUNT(*) as total 
+        FROM bookings b 
+        JOIN classes c ON b.class_id = c.id 
+        WHERE b.user_id = ? 
+        AND c.end_time < NOW() 
+        AND b.status = 'confirmed'
+        AND c.end_time != '0000-00-00 00:00:00'
+    ");
+    $completed_classes_stmt->bind_param("i", $student_id);
+    $completed_classes_stmt->execute();
+    $completed_classes_result = $completed_classes_stmt->get_result();
+    $completed_classes = $completed_classes_result->fetch_assoc()['total'] ?? 0;
+    $completed_classes_stmt->close();
 
-// Get class recommendations (simplified without age_group)
-$recommended_classes = $conn->query("
-    SELECT c.*, i.name as instructor_name, c.slots_available
-    FROM classes c
-    LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE c.start_time >= NOW() AND c.slots_available > 0
-    ORDER BY c.start_time ASC
-    LIMIT 4
-")->fetch_all(MYSQLI_ASSOC);
+    // Total payments
+    $total_payments_stmt = $conn->prepare("
+        SELECT COALESCE(SUM(amount), 0) as total 
+        FROM payments 
+        WHERE user_id = ? 
+        AND status = 'paid'
+    ");
+    $total_payments_stmt->bind_param("i", $student_id);
+    $total_payments_stmt->execute();
+    $total_payments_result = $total_payments_stmt->get_result();
+    $total_payments = $total_payments_result->fetch_assoc()['total'] ?? 0;
+    $total_payments_stmt->close();
 
-// Get attendance progress (last 30 days)
-$attendance_stats = $conn->query("
-    SELECT 
-        COUNT(*) as total_classes,
-        SUM(CASE WHEN c.end_time < NOW() THEN 1 ELSE 0 END) as attended_classes,
-        SUM(CASE WHEN c.end_time >= NOW() THEN 1 ELSE 0 END) as upcoming_classes
-    FROM bookings b
-    JOIN classes c ON b.class_id = c.id
-    WHERE b.user_id = $student_id 
-    AND b.status = 'confirmed'
-    AND c.start_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-")->fetch_assoc();
+    // Get upcoming classes list
+    $upcoming_classes_list_stmt = $conn->prepare("
+        SELECT c.*, i.name as instructor_name, b.status as booking_status
+        FROM bookings b
+        JOIN classes c ON b.class_id = c.id
+        LEFT JOIN instructors i ON c.instructor_id = i.id
+        WHERE b.user_id = ? 
+        AND c.start_time >= NOW() 
+        AND b.status = 'confirmed'
+        ORDER BY c.start_time ASC
+        LIMIT 5
+    ");
+    $upcoming_classes_list_stmt->bind_param("i", $student_id);
+    $upcoming_classes_list_stmt->execute();
+    $upcoming_classes_list_result = $upcoming_classes_list_stmt->get_result();
+    $upcoming_classes_list = $upcoming_classes_list_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $upcoming_classes_list_stmt->close();
 
-// Get student level from users table or default
-$student_level = $user['swimming_level'] ?? 'Beginner';
+    // Get recent payments
+    $recent_payments_stmt = $conn->prepare("
+        SELECT * FROM payments 
+        WHERE user_id = ? 
+        ORDER BY payment_date DESC 
+        LIMIT 5
+    ");
+    $recent_payments_stmt->bind_param("i", $student_id);
+    $recent_payments_stmt->execute();
+    $recent_payments_result = $recent_payments_stmt->get_result();
+    $recent_payments = $recent_payments_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $recent_payments_stmt->close();
 
-// Calculate next class time
-$next_class_result = $conn->query("
-    SELECT c.*, i.name as instructor_name
-    FROM bookings b
-    JOIN classes c ON b.class_id = c.id
-    LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE b.user_id = $student_id 
-    AND c.start_time >= NOW() 
-    AND b.status = 'confirmed'
-    ORDER BY c.start_time ASC
-    LIMIT 1
-");
-$next_class = $next_class_result ? $next_class_result->fetch_assoc() : null;
+    // Get class recommendations
+    $recommended_classes_stmt = $conn->prepare("
+        SELECT c.*, i.name as instructor_name, i.specialization, c.slots_available
+        FROM classes c
+        LEFT JOIN instructors i ON c.instructor_id = i.id
+        WHERE c.start_time >= NOW() 
+        AND c.slots_available > 0
+        AND c.status = 'scheduled'
+        ORDER BY c.start_time ASC
+        LIMIT 4
+    ");
+    $recommended_classes_stmt->execute();
+    $recommended_classes_result = $recommended_classes_stmt->get_result();
+    $recommended_classes = $recommended_classes_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $recommended_classes_stmt->close();
+
+    // Get attendance progress (last 30 days)
+    $attendance_stats_stmt = $conn->prepare("
+        SELECT 
+            COUNT(*) as total_classes,
+            SUM(CASE WHEN c.end_time < NOW() THEN 1 ELSE 0 END) as attended_classes,
+            SUM(CASE WHEN c.end_time >= NOW() THEN 1 ELSE 0 END) as upcoming_classes
+        FROM bookings b
+        JOIN classes c ON b.class_id = c.id
+        WHERE b.user_id = ? 
+        AND b.status = 'confirmed'
+        AND c.start_time >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        AND c.end_time != '0000-00-00 00:00:00'
+    ");
+    $attendance_stats_stmt->bind_param("i", $student_id);
+    $attendance_stats_stmt->execute();
+    $attendance_stats_result = $attendance_stats_stmt->get_result();
+    $attendance_stats = $attendance_stats_result->fetch_assoc() ?: ['total_classes' => 0, 'attended_classes' => 0, 'upcoming_classes' => 0];
+    $attendance_stats_stmt->close();
+
+    // Calculate next class time
+    $next_class_stmt = $conn->prepare("
+        SELECT c.*, i.name as instructor_name
+        FROM bookings b
+        JOIN classes c ON b.class_id = c.id
+        LEFT JOIN instructors i ON c.instructor_id = i.id
+        WHERE b.user_id = ? 
+        AND c.start_time >= NOW() 
+        AND b.status = 'confirmed'
+        ORDER BY c.start_time ASC
+        LIMIT 1
+    ");
+    $next_class_stmt->bind_param("i", $student_id);
+    $next_class_stmt->execute();
+    $next_class_result = $next_class_stmt->get_result();
+    $next_class = $next_class_result->fetch_assoc() ?: null;
+    $next_class_stmt->close();
+
+} catch (Exception $e) {
+    error_log("Dashboard query error: " . $e->getMessage());
+    // Initialize empty values if queries fail
+    $total_bookings = 0;
+    $upcoming_classes = 0;
+    $completed_classes = 0;
+    $total_payments = 0;
+    $upcoming_classes_list = [];
+    $recent_payments = [];
+    $recommended_classes = [];
+    $attendance_stats = ['total_classes' => 0, 'attended_classes' => 0, 'upcoming_classes' => 0];
+    $next_class = null;
+    $error_msg = "Unable to load dashboard data. Please try again later.";
+}
+
+// Get user info
+$user = [];
+$user_stmt = $conn->prepare("SELECT name, email, phone, age, emergency_contact FROM users WHERE id = ?");
+if ($user_stmt) {
+    $user_stmt->bind_param("i", $student_id);
+    $user_stmt->execute();
+    $user_result = $user_stmt->get_result();
+    $user = $user_result->fetch_assoc() ?: [];
+    $user_stmt->close();
+}
 
 // Get current date and time
 $current_date = date('l, F j, Y');
 $current_time = date('g:i A');
+
+// Load success message from session
+if (isset($_SESSION['success_msg'])) {
+    $success_msg = $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard | AquaFlow Student Portal</title>
+    <title>Dashboard | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #0d6efd;
             --primary-dark: #0a58ca;
-            --primary-light: #dbeafe;
-            --secondary: #6c757d;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #06b6d4;
+            --success: #198754;
+            --warning: #ffc107;
+            --danger: #dc3545;
             --light: #f8f9fa;
             --dark: #212529;
-            --gray-50: #f9fafb;
-            --gray-100: #f3f4f6;
-            --gray-200: #e5e7eb;
-            --gray-300: #d1d5db;
-            --gray-400: #9ca3af;
-            --gray-500: #6b7280;
-            --gray-600: #4b5563;
-            --gray-700: #374151;
-            --gray-800: #1f2937;
-            --gray-900: #111827;
+            --aqua: #0dcaf0;
+            --blue-light: #e7f1ff;
         }
-
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #f0f9ff 0%, #e6f0ff 100%);
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
             min-height: 100vh;
-            color: var(--gray-800);
-            line-height: 1.6;
+            color: #333;
         }
-
+        
         .dashboard-container {
             display: flex;
             min-height: 100vh;
         }
-
-        /* Sidebar Styling */
+        
+        /* Sidebar */
         .sidebar {
             width: 260px;
             background: white;
-            border-right: 1px solid var(--gray-200);
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
             position: fixed;
             top: 0;
             left: 0;
             bottom: 0;
             z-index: 1000;
-            transition: all 0.3s ease;
+            padding: 20px 0;
         }
-
+        
         .logo-area {
-            padding: 25px 20px;
-            border-bottom: 1px solid var(--gray-200);
+            padding: 0 25px 25px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
         }
-
+        
         .logo {
             display: flex;
             align-items: center;
             gap: 12px;
             text-decoration: none;
+            color: var(--dark);
         }
-
+        
         .logo-icon {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
             border-radius: 10px;
             display: flex;
             align-items: center;
@@ -165,121 +266,112 @@ $current_time = date('g:i A');
             color: white;
             font-size: 20px;
         }
-
+        
         .logo-text h3 {
-            font-family: 'Poppins', sans-serif;
             font-weight: 700;
-            font-size: 20px;
+            font-size: 22px;
             margin: 0;
-            color: var(--gray-900);
+            background: linear-gradient(90deg, var(--primary), var(--aqua));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-
+        
         .logo-text span {
             font-size: 12px;
-            color: var(--gray-500);
-            font-weight: 500;
+            color: #6c757d;
         }
-
+        
         .nav-menu {
-            padding: 20px 15px;
+            padding: 0 15px;
         }
-
+        
         .nav-item {
             margin-bottom: 5px;
         }
-
+        
         .nav-link {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 12px 15px;
             border-radius: 10px;
-            color: var(--gray-600);
+            color: #495057;
             text-decoration: none;
             font-weight: 500;
             transition: all 0.3s ease;
         }
-
+        
         .nav-link:hover {
-            background: var(--gray-100);
+            background: var(--blue-light);
             color: var(--primary);
             transform: translateX(5px);
         }
-
+        
         .nav-link.active {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: white;
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
         }
-
-        .nav-link.active i {
-            color: white;
-        }
-
+        
         .nav-link i {
             width: 20px;
             text-align: center;
             font-size: 18px;
-            color: var(--gray-500);
         }
-
-        .nav-link.active:hover {
-            transform: translateX(5px);
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #0a3d9c 100%);
-        }
-
+        
         .logout-section {
             padding: 20px;
-            border-top: 1px solid var(--gray-200);
-            margin-top: auto;
             position: absolute;
             bottom: 0;
             width: 100%;
+            border-top: 1px solid #eee;
         }
-
-        /* Main Content Styling */
+        
+        /* Main Content */
         .main-content {
             flex: 1;
             margin-left: 260px;
-            padding: 20px;
-            transition: all 0.3s ease;
+            padding: 30px;
         }
-
-        /* Header Styling */
+        
+        /* Header */
         .header {
             background: white;
             border-radius: 15px;
-            padding: 20px 30px;
+            padding: 25px 30px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
+        
         .header-left h1 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 28px;
+            font-size: 32px;
             font-weight: 700;
             margin-bottom: 5px;
-            color: var(--gray-900);
+            background: linear-gradient(90deg, var(--primary), var(--aqua));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-
+        
         .header-left p {
-            color: var(--gray-600);
+            color: #6c757d;
             margin: 0;
-            font-size: 15px;
         }
-
+        
         .user-profile {
             display: flex;
             align-items: center;
             gap: 15px;
+            background: var(--light);
+            padding: 12px 20px;
+            border-radius: 10px;
         }
-
+        
         .user-avatar {
-            width: 50px;
-            height: 50px;
+            width: 45px;
+            height: 45px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50%;
             display: flex;
@@ -288,22 +380,40 @@ $current_time = date('g:i A');
             color: white;
             font-weight: 600;
             font-size: 18px;
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-
+        
         .user-info h5 {
             font-weight: 600;
             margin: 0;
-            color: var(--gray-900);
         }
-
+        
         .user-info p {
-            color: var(--gray-500);
-            font-size: 13px;
+            color: #6c757d;
+            font-size: 14px;
             margin: 0;
         }
-
+        
+        /* Alerts */
+        .alert-custom {
+            border-radius: 12px;
+            border: none;
+            padding: 20px 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            animation: slideIn 0.5s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
         /* Welcome Banner */
         .welcome-banner {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
@@ -314,7 +424,7 @@ $current_time = date('g:i A');
             position: relative;
             overflow: hidden;
         }
-
+        
         .welcome-banner::before {
             content: '';
             position: absolute;
@@ -325,26 +435,26 @@ $current_time = date('g:i A');
             background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
             border-radius: 50%;
         }
-
+        
         .banner-content {
             position: relative;
             z-index: 2;
         }
-
+        
         .banner-content h2 {
             font-family: 'Poppins', sans-serif;
             font-size: 32px;
             font-weight: 700;
             margin-bottom: 10px;
         }
-
+        
         .banner-content p {
             font-size: 16px;
             opacity: 0.9;
             margin-bottom: 20px;
             max-width: 600px;
         }
-
+        
         .date-time {
             display: inline-block;
             background: rgba(255, 255, 255, 0.2);
@@ -353,7 +463,69 @@ $current_time = date('g:i A');
             font-size: 14px;
             backdrop-filter: blur(10px);
         }
-
+        
+        /* Next Class Banner */
+        .next-class-banner {
+            background: linear-gradient(135deg, var(--success) 0%, #157347 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            display: <?= $next_class ? 'block' : 'none' ?>;
+        }
+        
+        .next-class-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .next-class-icon {
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+        
+        .next-class-info h4 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .next-class-info p {
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        .countdown {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .countdown-item {
+            text-align: center;
+        }
+        
+        .countdown-number {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        .countdown-label {
+            font-size: 12px;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
         /* Stats Cards */
         .stats-grid {
             display: grid;
@@ -361,23 +533,23 @@ $current_time = date('g:i A');
             gap: 20px;
             margin-bottom: 30px;
         }
-
+        
         .stat-card {
             background: white;
             border-radius: 15px;
             padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
             transition: all 0.3s ease;
-            border: 1px solid var(--gray-200);
+            border: 1px solid #e9ecef;
             position: relative;
             overflow: hidden;
         }
-
+        
         .stat-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
-
+        
         .stat-card::before {
             content: '';
             position: absolute;
@@ -387,7 +559,7 @@ $current_time = date('g:i A');
             height: 4px;
             background: linear-gradient(90deg, var(--primary), var(--primary-dark));
         }
-
+        
         .stat-icon {
             width: 56px;
             height: 56px;
@@ -399,25 +571,25 @@ $current_time = date('g:i A');
             margin-bottom: 20px;
             color: white;
         }
-
+        
         .stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-        .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
-
+        .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, var(--success) 0%, #157347 100%); }
+        .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%); }
+        .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, var(--aqua) 0%, #0891b2 100%); }
+        
         .stat-content h3 {
             font-size: 32px;
             font-weight: 700;
             margin-bottom: 5px;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .stat-content p {
-            color: var(--gray-600);
+            color: #6c757d;
             font-size: 14px;
             margin: 0;
         }
-
+        
         /* Content Grid */
         .content-grid {
             display: grid;
@@ -425,38 +597,38 @@ $current_time = date('g:i A');
             gap: 30px;
             margin-bottom: 30px;
         }
-
+        
         @media (max-width: 1200px) {
             .content-grid {
                 grid-template-columns: 1fr;
             }
         }
-
+        
         /* Panel Styling */
         .panel {
             background: white;
             border-radius: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
             overflow: hidden;
-            border: 1px solid var(--gray-200);
+            border: 1px solid #e9ecef;
         }
-
+        
         .panel-header {
             padding: 20px 25px;
-            border-bottom: 1px solid var(--gray-200);
+            border-bottom: 1px solid #e9ecef;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
+        
         .panel-header h3 {
             font-family: 'Poppins', sans-serif;
             font-size: 20px;
             font-weight: 600;
             margin: 0;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .panel-header .btn-link {
             color: var(--primary);
             text-decoration: none;
@@ -467,84 +639,84 @@ $current_time = date('g:i A');
             gap: 5px;
             transition: all 0.3s ease;
         }
-
+        
         .panel-header .btn-link:hover {
             color: var(--primary-dark);
             gap: 8px;
         }
-
+        
         .panel-body {
             padding: 25px;
         }
-
+        
         /* Class List */
         .class-list {
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
-
+        
         .class-item {
             display: flex;
             align-items: center;
             padding: 20px;
-            background: var(--gray-50);
+            background: var(--light);
             border-radius: 12px;
             border-left: 4px solid var(--primary);
             transition: all 0.3s ease;
         }
-
+        
         .class-item:hover {
-            background: var(--gray-100);
+            background: #e9ecef;
             transform: translateX(5px);
         }
-
+        
         .class-time {
             min-width: 100px;
             text-align: center;
             padding-right: 20px;
-            border-right: 1px solid var(--gray-200);
+            border-right: 1px solid #dee2e6;
         }
-
+        
         .class-date {
             font-size: 14px;
-            color: var(--gray-600);
+            color: #6c757d;
             margin-bottom: 5px;
         }
-
+        
         .class-hour {
             font-size: 20px;
             font-weight: 700;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .class-details {
             flex: 1;
             padding: 0 20px;
         }
-
+        
         .class-title {
             font-weight: 600;
-            color: var(--gray-900);
+            color: var(--dark);
             margin-bottom: 5px;
         }
-
+        
         .class-instructor {
             font-size: 14px;
-            color: var(--gray-600);
+            color: #6c757d;
             margin-bottom: 5px;
         }
-
+        
         .class-instructor i {
             color: var(--primary);
             margin-right: 5px;
         }
-
+        
         .class-status {
             min-width: 100px;
             text-align: center;
         }
-
+        
         .status-badge {
             display: inline-block;
             padding: 6px 12px;
@@ -553,55 +725,55 @@ $current_time = date('g:i A');
             font-weight: 600;
             text-transform: uppercase;
         }
-
+        
         .status-badge.confirmed {
-            background: rgba(16, 185, 129, 0.1);
-            color: #10b981;
+            background: rgba(25, 135, 84, 0.1);
+            color: var(--success);
         }
-
+        
         .status-badge.pending {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning);
         }
-
+        
         /* Payment List */
         .payment-list {
             display: flex;
             flex-direction: column;
             gap: 15px;
         }
-
+        
         .payment-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 15px;
-            background: var(--gray-50);
+            background: var(--light);
             border-radius: 12px;
             transition: all 0.3s ease;
         }
-
+        
         .payment-item:hover {
-            background: var(--gray-100);
+            background: #e9ecef;
         }
-
+        
         .payment-info h5 {
             font-weight: 600;
             margin-bottom: 5px;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .payment-date {
             font-size: 13px;
-            color: var(--gray-500);
+            color: #6c757d;
         }
-
+        
         .payment-amount {
             font-weight: 700;
             font-size: 18px;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .payment-status {
             display: inline-block;
             padding: 4px 10px;
@@ -610,17 +782,22 @@ $current_time = date('g:i A');
             font-weight: 600;
             margin-left: 10px;
         }
-
+        
         .status-paid {
-            background: rgba(16, 185, 129, 0.1);
-            color: #10b981;
+            background: rgba(25, 135, 84, 0.1);
+            color: var(--success);
         }
-
+        
         .status-pending {
-            background: rgba(245, 158, 11, 0.1);
-            color: #f59e0b;
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning);
         }
-
+        
+        .status-failed {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger);
+        }
+        
         /* Progress Card */
         .progress-card {
             background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
@@ -629,14 +806,14 @@ $current_time = date('g:i A');
             padding: 25px;
             margin-bottom: 20px;
         }
-
+        
         .progress-header {
             display: flex;
             align-items: center;
             gap: 15px;
             margin-bottom: 20px;
         }
-
+        
         .progress-icon {
             width: 50px;
             height: 50px;
@@ -647,84 +824,84 @@ $current_time = date('g:i A');
             justify-content: center;
             font-size: 24px;
         }
-
+        
         .progress-content h4 {
             font-family: 'Poppins', sans-serif;
             font-size: 20px;
             margin-bottom: 5px;
         }
-
+        
         .progress-content p {
             opacity: 0.8;
             font-size: 14px;
             margin: 0;
         }
-
+        
         .progress-bar-container {
             margin-bottom: 15px;
         }
-
+        
         .progress-label {
             display: flex;
             justify-content: space-between;
             margin-bottom: 8px;
             font-size: 14px;
         }
-
+        
         .progress-bar {
             height: 8px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 4px;
             overflow: hidden;
         }
-
+        
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, #60a5fa, #93c5fd);
             border-radius: 4px;
             transition: width 0.5s ease;
         }
-
+        
         /* Quick Actions */
         .quick-actions {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
         }
-
+        
         .action-btn {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 20px 15px;
-            background: var(--gray-50);
+            background: var(--light);
             border-radius: 12px;
             text-decoration: none;
             transition: all 0.3s ease;
             border: 2px solid transparent;
         }
-
+        
         .action-btn:hover {
             background: white;
             border-color: var(--primary);
             transform: translateY(-3px);
             box-shadow: 0 5px 20px rgba(13, 110, 253, 0.1);
         }
-
+        
         .action-btn i {
             font-size: 24px;
             color: var(--primary);
             margin-bottom: 10px;
         }
-
+        
         .action-btn span {
             font-weight: 600;
-            color: var(--gray-900);
+            color: var(--dark);
             text-align: center;
             font-size: 14px;
         }
-
+        
         /* Recommended Classes */
         .recommended-grid {
             display: grid;
@@ -732,27 +909,27 @@ $current_time = date('g:i A');
             gap: 20px;
             margin-top: 20px;
         }
-
+        
         .class-card {
             background: white;
             border-radius: 12px;
             overflow: hidden;
-            border: 1px solid var(--gray-200);
+            border: 1px solid #e9ecef;
             transition: all 0.3s ease;
         }
-
+        
         .class-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
-
+        
         .class-image {
             height: 150px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             position: relative;
             overflow: hidden;
         }
-
+        
         .class-badge {
             position: absolute;
             top: 15px;
@@ -765,125 +942,63 @@ $current_time = date('g:i A');
             font-size: 12px;
             font-weight: 600;
         }
-
+        
         .class-content {
             padding: 20px;
         }
-
+        
         .class-content h4 {
             font-weight: 600;
             margin-bottom: 10px;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .class-meta {
             display: flex;
             gap: 15px;
             margin-bottom: 15px;
             font-size: 13px;
-            color: var(--gray-600);
+            color: #6c757d;
         }
-
+        
         .class-meta i {
             color: var(--primary);
             margin-right: 5px;
         }
-
+        
         .class-actions {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-top: 15px;
         }
-
+        
         .slots-info {
             font-size: 13px;
-            color: var(--gray-600);
+            color: #6c757d;
         }
-
+        
         .slots-info strong {
             color: var(--success);
         }
-
-        /* Next Class Banner - Only show if next_class exists */
-        .next-class-banner {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            display: <?= $next_class ? 'block' : 'none' ?>;
-        }
-
-        .next-class-header {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .next-class-icon {
-            width: 60px;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-        }
-
-        .next-class-info h4 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-
-        .next-class-info p {
-            opacity: 0.9;
-            margin: 0;
-        }
-
-        .countdown {
-            display: flex;
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .countdown-item {
-            text-align: center;
-        }
-
-        .countdown-number {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-
-        .countdown-label {
-            font-size: 12px;
-            opacity: 0.8;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
+        
         /* Student Level Card */
         .level-card {
             background: white;
             border-radius: 15px;
             padding: 25px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--gray-200);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
             margin-bottom: 20px;
         }
-
+        
         .level-header {
             display: flex;
             align-items: center;
             gap: 15px;
             margin-bottom: 20px;
         }
-
+        
         .level-icon {
             width: 50px;
             height: 50px;
@@ -895,20 +1010,20 @@ $current_time = date('g:i A');
             color: white;
             font-size: 24px;
         }
-
+        
         .level-content h4 {
             font-family: 'Poppins', sans-serif;
             font-size: 20px;
             margin-bottom: 5px;
-            color: var(--gray-900);
+            color: var(--dark);
         }
-
+        
         .level-content p {
-            color: var(--gray-600);
+            color: #6c757d;
             font-size: 14px;
             margin: 0;
         }
-
+        
         .level-badge {
             display: inline-block;
             padding: 8px 16px;
@@ -918,8 +1033,41 @@ $current_time = date('g:i A');
             font-weight: 600;
             font-size: 14px;
         }
-
-        /* Responsive Design */
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+        
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+        
+        .empty-state h5 {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .empty-state p {
+            margin-bottom: 20px;
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+        
+        /* Responsive */
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -941,10 +1089,10 @@ $current_time = date('g:i A');
                 grid-template-columns: 1fr;
             }
         }
-
+        
         @media (max-width: 768px) {
             .main-content {
-                padding: 15px;
+                padding: 20px;
             }
             
             .header {
@@ -964,39 +1112,16 @@ $current_time = date('g:i A');
             .banner-content h2 {
                 font-size: 24px;
             }
-        }
-
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--gray-500);
-        }
-
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 15px;
-            opacity: 0.3;
-        }
-
-        .empty-state h5 {
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: var(--gray-600);
-        }
-
-        .empty-state p {
-            margin-bottom: 20px;
+            
+            .countdown {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .countdown-item {
+                flex: 1;
+                min-width: 70px;
+            }
         }
     </style>
 </head>
@@ -1010,12 +1135,12 @@ $current_time = date('g:i A');
                         <i class="bi bi-droplet"></i>
                     </div>
                     <div class="logo-text">
-                        <h3>AquaFlow</h3>
+                        <h3>Elite Swimming Academy</h3>
                         <span>Student Portal</span>
                     </div>
                 </a>
             </div>
-
+            
             <nav class="nav-menu">
                 <div class="nav-item">
                     <a href="index.php" class="nav-link active">
@@ -1025,8 +1150,8 @@ $current_time = date('g:i A');
                 </div>
                 <div class="nav-item">
                     <a href="classes.php" class="nav-link">
-                        <i class="bi bi-calendar-week"></i>
-                        <span class="nav-text">Classes</span>
+                        <i class="bi bi-calendar-check"></i>
+                        <span class="nav-text">Book Classes</span>
                     </a>
                 </div>
                 <div class="nav-item">
@@ -1048,52 +1173,71 @@ $current_time = date('g:i A');
                     </a>
                 </div>
             </nav>
-
+            
             <div class="logout-section">
-                <a href="logout.php" class="nav-link">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span class="nav-text">Logout</span>
-                </a>
+                <form method="post" action="logout.php" style="margin:0;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="nav-text">Logout</span>
+                    </button>
+                </form>
             </div>
         </aside>
-
+        
         <!-- Main Content -->
         <main class="main-content">
             <!-- Header -->
-            <header class="header fade-in">
+            <header class="header">
                 <div class="header-left">
-                    <h1>Welcome back, <?= htmlspecialchars($user['name']) ?>! 👋</h1>
+                    <h1 id="greeting">Welcome back, <?= htmlspecialchars($user['name'] ?? 'Student') ?>! 👋</h1>
                     <p>Here's what's happening with your swimming journey today</p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
-                        <?= strtoupper(substr($user['name'], 0, 1)) ?>
+                        <?= isset($user['name']) ? strtoupper(substr($user['name'], 0, 1)) : 'S' ?>
                     </div>
                     <div class="user-info">
-                        <h5><?= htmlspecialchars($user['name']) ?></h5>
-                        <p>Student ID: <?= htmlspecialchars($user['student_id'] ?? 'N/A') ?></p>
+                        <h5><?= htmlspecialchars($user['name'] ?? 'Student') ?></h5>
+                        <p>Student ID: <?= htmlspecialchars($student_id) ?></p>
                     </div>
                 </div>
             </header>
-
-            <!-- Next Class Banner (only shows if next_class exists) -->
-            <?php if($next_class): ?>
-            <div class="next-class-banner fade-in">
-                <div class="next-class-header">
-                    <div class="next-class-icon">
-                        <i class="bi bi-clock"></i>
-                    </div>
-                    <div class="next-class-info">
-                        <h4>Your Next Class</h4>
-                        <p><?= htmlspecialchars($next_class['title']) ?> with <?= htmlspecialchars($next_class['instructor_name']) ?></p>
-                    </div>
+            
+            <!-- Alerts -->
+            <?php if ($success_msg): ?>
+                <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <?= htmlspecialchars($success_msg) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
-                <div class="countdown" id="countdown">
-                    <!-- Countdown will be populated by JavaScript -->
-                </div>
-            </div>
             <?php endif; ?>
-
+            
+            <?php if ($error_msg): ?>
+                <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-circle-fill me-2"></i>
+                    <?= htmlspecialchars($error_msg) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Next Class Banner -->
+            <?php if ($next_class): ?>
+                <div class="next-class-banner fade-in">
+                    <div class="next-class-header">
+                        <div class="next-class-icon">
+                            <i class="bi bi-clock"></i>
+                        </div>
+                        <div class="next-class-info">
+                            <h4>Your Next Class</h4>
+                            <p><?= htmlspecialchars($next_class['title']) ?> with <?= htmlspecialchars($next_class['instructor_name']) ?></p>
+                        </div>
+                    </div>
+                    <div class="countdown" id="countdown">
+                        <!-- Countdown will be populated by JavaScript -->
+                    </div>
+                </div>
+            <?php endif; ?>
+            
             <!-- Welcome Banner -->
             <div class="welcome-banner fade-in">
                 <div class="banner-content">
@@ -1107,7 +1251,7 @@ $current_time = date('g:i A');
                     </div>
                 </div>
             </div>
-
+            
             <!-- Stats Cards -->
             <div class="stats-grid fade-in">
                 <div class="stat-card">
@@ -1147,7 +1291,7 @@ $current_time = date('g:i A');
                     </div>
                 </div>
             </div>
-
+            
             <!-- Main Content Grid -->
             <div class="content-grid">
                 <!-- Left Column -->
@@ -1161,7 +1305,7 @@ $current_time = date('g:i A');
                             </a>
                         </div>
                         <div class="panel-body">
-                            <?php if(empty($upcoming_classes_list)): ?>
+                            <?php if (empty($upcoming_classes_list)): ?>
                                 <div class="empty-state">
                                     <i class="bi bi-calendar-x"></i>
                                     <h5>No Upcoming Classes</h5>
@@ -1170,7 +1314,9 @@ $current_time = date('g:i A');
                                 </div>
                             <?php else: ?>
                                 <div class="class-list">
-                                    <?php foreach($upcoming_classes_list as $class): ?>
+                                    <?php foreach ($upcoming_classes_list as $class): 
+                                        $has_end_time = !empty($class['end_time']) && $class['end_time'] != '0000-00-00 00:00:00';
+                                    ?>
                                         <div class="class-item">
                                             <div class="class-time">
                                                 <div class="class-date">
@@ -1196,7 +1342,7 @@ $current_time = date('g:i A');
                             <?php endif; ?>
                         </div>
                     </div>
-
+                    
                     <!-- Recommended Classes -->
                     <div class="panel fade-in">
                         <div class="panel-header">
@@ -1206,14 +1352,14 @@ $current_time = date('g:i A');
                             </a>
                         </div>
                         <div class="panel-body">
-                            <?php if(empty($recommended_classes)): ?>
+                            <?php if (empty($recommended_classes)): ?>
                                 <div class="empty-state">
                                     <i class="bi bi-calendar-x"></i>
                                     <p>No classes available at the moment.</p>
                                 </div>
                             <?php else: ?>
                                 <div class="recommended-grid">
-                                    <?php foreach($recommended_classes as $class): ?>
+                                    <?php foreach ($recommended_classes as $class): ?>
                                         <div class="class-card">
                                             <div class="class-image">
                                                 <div class="class-badge">
@@ -1226,6 +1372,11 @@ $current_time = date('g:i A');
                                                     <span><i class="bi bi-person"></i> <?= htmlspecialchars($class['instructor_name']) ?></span>
                                                     <span><i class="bi bi-clock"></i> <?= date('M j, g:i A', strtotime($class['start_time'])) ?></span>
                                                 </div>
+                                                <?php if (!empty($class['specialization'])): ?>
+                                                    <p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
+                                                        <i class="bi bi-star"></i> <?= htmlspecialchars($class['specialization']) ?>
+                                                    </p>
+                                                <?php endif; ?>
                                                 <div class="class-actions">
                                                     <div class="slots-info">
                                                         <strong><?= $class['slots_available'] ?></strong> slots available
@@ -1242,7 +1393,7 @@ $current_time = date('g:i A');
                         </div>
                     </div>
                 </div>
-
+                
                 <!-- Right Column -->
                 <div class="right-column">
                     <!-- Student Level -->
@@ -1252,15 +1403,15 @@ $current_time = date('g:i A');
                                 <i class="bi bi-award"></i>
                             </div>
                             <div class="level-content">
-                                <h4>Your Swimming Level</h4>
-                                <p>Current skill level</p>
+                                <h4>Swimming Progress</h4>
+                                <p>Keep up the great work!</p>
                             </div>
                         </div>
                         <div class="text-center">
-                            <span class="level-badge"><?= htmlspecialchars(ucfirst($student_level)) ?></span>
+                            <span class="level-badge"><?= $total_bookings ?> Classes Booked</span>
                         </div>
                     </div>
-
+                    
                     <!-- Recent Payments -->
                     <div class="panel fade-in">
                         <div class="panel-header">
@@ -1270,24 +1421,24 @@ $current_time = date('g:i A');
                             </a>
                         </div>
                         <div class="panel-body">
-                            <?php if(empty($recent_payments)): ?>
+                            <?php if (empty($recent_payments)): ?>
                                 <div class="empty-state">
                                     <i class="bi bi-credit-card"></i>
                                     <p>No payment history</p>
                                 </div>
                             <?php else: ?>
                                 <div class="payment-list">
-                                    <?php foreach($recent_payments as $payment): ?>
+                                    <?php foreach ($recent_payments as $payment): ?>
                                         <div class="payment-item">
                                             <div class="payment-info">
-                                                <h5>Class Payment</h5>
+                                                <h5><?= htmlspecialchars($payment['description'] ?? 'Class Payment') ?></h5>
                                                 <div class="payment-date">
                                                     <?= date('M j, Y', strtotime($payment['payment_date'])) ?>
                                                 </div>
                                             </div>
                                             <div>
                                                 <span class="payment-amount">$<?= number_format($payment['amount'], 2) ?></span>
-                                                <span class="payment-status <?= $payment['status'] == 'paid' ? 'status-paid' : 'status-pending' ?>">
+                                                <span class="payment-status status-<?= $payment['status'] ?>">
                                                     <?= ucfirst($payment['status']) ?>
                                                 </span>
                                             </div>
@@ -1297,7 +1448,7 @@ $current_time = date('g:i A');
                             <?php endif; ?>
                         </div>
                     </div>
-
+                    
                     <!-- Progress Tracking -->
                     <div class="progress-card fade-in">
                         <div class="progress-header">
@@ -1331,9 +1482,13 @@ $current_time = date('g:i A');
                                 <div class="h4 fw-bold text-success"><?= $attendance_stats['attended_classes'] ?></div>
                                 <small>Attended</small>
                             </div>
+                            <div class="text-center">
+                                <div class="h4 fw-bold text-primary"><?= $attendance_stats['upcoming_classes'] ?></div>
+                                <small>Upcoming</small>
+                            </div>
                         </div>
                     </div>
-
+                    
                     <!-- Quick Actions -->
                     <div class="panel fade-in">
                         <div class="panel-header">
@@ -1364,12 +1519,12 @@ $current_time = date('g:i A');
             </div>
         </main>
     </div>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Countdown timer for next class (only if next_class exists)
-            <?php if($next_class): ?>
+            // Countdown timer for next class
+            <?php if ($next_class): ?>
             function updateCountdown() {
                 const nextClassTime = new Date("<?= $next_class['start_time'] ?>").getTime();
                 const now = new Date().getTime();
@@ -1410,7 +1565,7 @@ $current_time = date('g:i A');
             updateCountdown();
             setInterval(updateCountdown, 1000);
             <?php endif; ?>
-
+            
             // Update date and time in real-time
             function updateDateTime() {
                 const now = new Date();
@@ -1436,12 +1591,30 @@ $current_time = date('g:i A');
             
             updateDateTime();
             setInterval(updateDateTime, 1000);
-
+            
+            // Update greeting based on time of day
+            function updateGreeting() {
+                const hour = new Date().getHours();
+                let greeting = 'Good ';
+                
+                if (hour < 12) greeting += 'Morning';
+                else if (hour < 18) greeting += 'Afternoon';
+                else greeting += 'Evening';
+                
+                const userName = "<?= htmlspecialchars($user['name'] ?? 'Student') ?>";
+                const header = document.getElementById('greeting');
+                if (header) {
+                    header.innerHTML = `${greeting}, ${userName}! <span class="wave">👋</span>`;
+                }
+            }
+            
+            updateGreeting();
+            
             // Animate progress bars on scroll
             const observerOptions = {
                 threshold: 0.5
             };
-
+            
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
@@ -1456,34 +1629,17 @@ $current_time = date('g:i A');
                     }
                 });
             }, observerOptions);
-
+            
             document.querySelectorAll('.progress-card').forEach(card => {
                 observer.observe(card);
             });
-
+            
             // Add fade-in animation to cards
             const cards = document.querySelectorAll('.fade-in');
             cards.forEach((card, index) => {
                 card.style.animationDelay = `${index * 0.1}s`;
             });
-
-            // Update greeting based on time of day
-            function updateGreeting() {
-                const hour = new Date().getHours();
-                let greeting = 'Good ';
-                
-                if (hour < 12) greeting += 'Morning';
-                else if (hour < 18) greeting += 'Afternoon';
-                else greeting += 'Evening';
-                
-                const header = document.querySelector('.header-left h1');
-                if (header) {
-                    header.innerHTML = `${greeting}, <?= htmlspecialchars($user['name']) ?>! <span class="wave">👋</span>`;
-                }
-            }
             
-            updateGreeting();
-
             // Add hover effect to stat cards
             document.querySelectorAll('.stat-card').forEach(card => {
                 card.addEventListener('mouseenter', function() {
@@ -1494,54 +1650,36 @@ $current_time = date('g:i A');
                     this.style.transform = 'translateY(0)';
                 });
             });
-
-            // Add click animation to action buttons
-            document.querySelectorAll('.action-btn').forEach(btn => {
-                btn.addEventListener('click', function(e) {
-                    // Add ripple effect
-                    const ripple = document.createElement('span');
-                    const rect = this.getBoundingClientRect();
-                    const size = Math.max(rect.width, rect.height);
-                    const x = e.clientX - rect.left - size / 2;
-                    const y = e.clientY - rect.top - size / 2;
-                    
-                    ripple.style.cssText = `
-                        position: absolute;
-                        border-radius: 50%;
-                        background: rgba(13, 110, 253, 0.3);
-                        transform: scale(0);
-                        animation: ripple 0.6s linear;
-                        width: ${size}px;
-                        height: ${size}px;
-                        top: ${y}px;
-                        left: ${x}px;
-                        pointer-events: none;
-                    `;
-                    
-                    this.appendChild(ripple);
-                    
-                    // Remove ripple after animation
-                    setTimeout(() => {
-                        ripple.remove();
-                    }, 600);
-                });
-            });
-
-            // Add ripple animation CSS
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes ripple {
-                    to {
-                        transform: scale(4);
-                        opacity: 0;
+            
+            // Add count-up animation to stats
+            const statValues = document.querySelectorAll('.stat-content h3');
+            statValues.forEach(stat => {
+                const target = parseInt(stat.textContent.replace('$', '').replace(',', ''));
+                let current = 0;
+                const increment = Math.ceil(target / 20);
+                
+                const timer = setInterval(() => {
+                    current += increment;
+                    if (current >= target) {
+                        current = target;
+                        clearInterval(timer);
                     }
-                }
-                .action-btn {
-                    position: relative;
-                    overflow: hidden;
-                }
-            `;
-            document.head.appendChild(style);
+                    // Format number with commas and add $ back for payment
+                    if (stat.textContent.includes('$')) {
+                        stat.textContent = '$' + current.toLocaleString();
+                    } else {
+                        stat.textContent = current.toLocaleString();
+                    }
+                }, 50);
+            });
+            
+            // Auto-hide alerts after 5 seconds
+            document.querySelectorAll('.alert').forEach(alert => {
+                setTimeout(() => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }, 5000);
+            });
         });
     </script>
 </body>

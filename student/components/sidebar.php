@@ -63,6 +63,10 @@ $current_page = basename($_SERVER['PHP_SELF']);
   </ul>
 
   <div class="sidebar-bottom">
-    <a href="logout.php" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    <form method="post" action="logout.php" style="width:100%;margin:0;">
+      <button type="submit" name="confirm_logout" value="1" class="btn-logout" style="width:100%;border:none;background:none;padding:10px;">
+        <i class="bi bi-box-arrow-right"></i> Logout
+      </button>
+    </form>
   </div>
 </div>

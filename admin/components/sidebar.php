@@ -46,10 +46,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
       </a>
     </li>
     <li class="nav-item mt-auto">
-      <a href="logout.php" class="nav-link text-danger">
-        <i class="bi bi-box-arrow-right"></i>
-        <span>Logout</span>
-      </a>
+      <form method="post" action="logout.php" style="margin:0;">
+        <button type="submit" name="confirm_logout" value="1" class="nav-link text-danger" style="background:none;border:none;width:100%;text-align:left;padding:12px 16px;">
+          <i class="bi bi-box-arrow-right"></i>
+          <span>Logout</span>
+        </button>
+      </form>
     </li>
   </ul>
 </div>

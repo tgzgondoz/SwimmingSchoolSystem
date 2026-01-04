@@ -1,516 +1,296 @@
+[file name]: index.php
+[file content begin]
 <?php
-// admin/analytics.php
+// admin/index.php - Professional Admin Dashboard
 session_start();
-include __DIR__ . '/../inc/db.php';
-include __DIR__ . '/../inc/functions.php';
+require_once __DIR__ . '/../inc/db.php';
+require_once __DIR__ . '/../inc/functions.php';
 
-// Check database connection
-if (!$conn) {
-    die("Database connection error.");
+// Authentication and role check
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header('Location: ../login.php');
+    exit();
 }
 
-requireRole('admin');
-$user = getCurrentUser($conn);
+$admin_id = $_SESSION['user_id'];
+$success_msg = '';
+$error_msg = '';
 
-// Generate CSRF token
-if (!isset($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrf_token = $_SESSION['csrf_token'];
+// Get admin statistics with proper error handling
+try {
+    // Total Students
+    $total_students_stmt = $conn->prepare("SELECT COUNT(*) as total FROM users WHERE role = 'student' AND (status = 'active' OR status IS NULL OR status = '')");
+    $total_students_stmt->execute();
+    $total_students_result = $total_students_stmt->get_result();
+    $total_students = $total_students_result->fetch_assoc()['total'] ?? 0;
+    $total_students_stmt->close();
 
-// Handle report generation and exports
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrf_token) {
-        die("Security token invalid. Please try again.");
-    }
-    
-    if (isset($_POST['generate_report'])) {
-        $report_type = filter_input(INPUT_POST, 'report_type', FILTER_SANITIZE_SPECIAL_CHARS);
-        $start_date = filter_input(INPUT_POST, 'start_date', FILTER_SANITIZE_SPECIAL_CHARS);
-        $end_date = filter_input(INPUT_POST, 'end_date', FILTER_SANITIZE_SPECIAL_CHARS);
-        
-        // Validate dates
-        if (!validateDate($start_date) || !validateDate($end_date)) {
-            die("Invalid date format.");
-        }
-        
-        // Ensure end date is not before start date
-        if (strtotime($end_date) < strtotime($start_date)) {
-            die("End date must be after start date.");
-        }
-        
-        // Limit date range to prevent excessive data load
-        $max_days = 365; // Maximum 1 year
-        if ((strtotime($end_date) - strtotime($start_date)) > ($max_days * 86400)) {
-            die("Date range cannot exceed $max_days days.");
-        }
-        
-        // Generate different reports based on type
-        $allowed_reports = ['financial', 'attendance', 'student', 'class'];
-        if (!in_array($report_type, $allowed_reports)) {
-            die("Invalid report type.");
-        }
-        
-        switch($report_type) {
-            case 'financial':
-                $report_data = generateFinancialReport($conn, $start_date, $end_date);
-                $filename = "financial_report_{$start_date}_to_{$end_date}";
-                break;
-            case 'attendance':
-                $report_data = generateAttendanceReport($conn, $start_date, $end_date);
-                $filename = "attendance_report_{$start_date}_to_{$end_date}";
-                break;
-            case 'student':
-                $report_data = generateStudentReport($conn, $start_date, $end_date);
-                $filename = "student_report_{$start_date}_to_{$end_date}";
-                break;
-            case 'class':
-                $report_data = generateClassReport($conn, $start_date, $end_date);
-                $filename = "class_report_{$start_date}_to_{$end_date}";
-                break;
-            default:
-                $report_data = [];
-                $filename = "report_{$start_date}_to_{$end_date}";
-        }
-        
-        if (isset($_POST['export_format'])) {
-            $format = filter_input(INPUT_POST, 'export_format', FILTER_SANITIZE_SPECIAL_CHARS);
-            $allowed_formats = ['csv', 'pdf', 'excel'];
-            if (!in_array($format, $allowed_formats)) {
-                die("Invalid export format.");
-            }
-            
-            // Sanitize filename
-            $filename = preg_replace('/[^a-zA-Z0-9_-]/', '', $filename);
-            exportReport($report_data, $filename, $format);
-            exit;
-        } else {
-            $_SESSION['report_preview'] = $report_data;
-            header('Location: analytics.php?preview=true');
-            exit;
-        }
-    }
-}
+    // Total Instructors
+    $total_instructors_stmt = $conn->prepare("SELECT COUNT(*) as total FROM instructors WHERE status = 'active'");
+    $total_instructors_stmt->execute();
+    $total_instructors_result = $total_instructors_stmt->get_result();
+    $total_instructors = $total_instructors_result->fetch_assoc()['total'] ?? 0;
+    $total_instructors_stmt->close();
 
-// Date validation function
-function validateDate($date, $format = 'Y-m-d') {
-    $d = DateTime::createFromFormat($format, $date);
-    return $d && $d->format($format) === $date;
-}
+    // Active Classes (scheduled)
+    $active_classes_stmt = $conn->prepare("SELECT COUNT(*) as total FROM classes WHERE status = 'scheduled' AND start_time >= NOW()");
+    $active_classes_stmt->execute();
+    $active_classes_result = $active_classes_stmt->get_result();
+    $active_classes = $active_classes_result->fetch_assoc()['total'] ?? 0;
+    $active_classes_stmt->close();
 
-// Report generation functions
-function generateFinancialReport($conn, $start_date, $end_date) {
-    $report = [
-        'title' => 'Financial Report',
-        'period' => "$start_date to $end_date",
-        'headers' => ['Date', 'Student', 'Amount', 'Payment Method', 'Status'],
-        'data' => [],
-        'summary' => []
+    // Total Bookings
+    $total_bookings_stmt = $conn->prepare("SELECT COUNT(*) as total FROM bookings");
+    $total_bookings_stmt->execute();
+    $total_bookings_result = $total_bookings_stmt->get_result();
+    $total_bookings = $total_bookings_result->fetch_assoc()['total'] ?? 0;
+    $total_bookings_stmt->close();
+
+    // Today's Bookings
+    $today_bookings_stmt = $conn->prepare("SELECT COUNT(*) as total FROM bookings WHERE DATE(created_at) = CURDATE()");
+    $today_bookings_stmt->execute();
+    $today_bookings_result = $today_bookings_stmt->get_result();
+    $today_bookings = $today_bookings_result->fetch_assoc()['total'] ?? 0;
+    $today_bookings_stmt->close();
+
+    // Total Revenue
+    $total_revenue_stmt = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid'");
+    $total_revenue_stmt->execute();
+    $total_revenue_result = $total_revenue_stmt->get_result();
+    $total_revenue = $total_revenue_result->fetch_assoc()['total'] ?? 0;
+    $total_revenue_stmt->close();
+
+    // Today's Revenue
+    $today_revenue_stmt = $conn->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid' AND DATE(payment_date) = CURDATE()");
+    $today_revenue_stmt->execute();
+    $today_revenue_result = $today_revenue_stmt->get_result();
+    $today_revenue = $today_revenue_result->fetch_assoc()['total'] ?? 0;
+    $today_revenue_stmt->close();
+
+    // Pending Bookings
+    $pending_bookings_stmt = $conn->prepare("SELECT COUNT(*) as total FROM bookings WHERE status = 'pending'");
+    $pending_bookings_stmt->execute();
+    $pending_bookings_result = $pending_bookings_stmt->get_result();
+    $pending_bookings = $pending_bookings_result->fetch_assoc()['total'] ?? 0;
+    $pending_bookings_stmt->close();
+
+    // Pending Payments
+    $pending_payments_stmt = $conn->prepare("SELECT COUNT(*) as total FROM payments WHERE status = 'pending'");
+    $pending_payments_stmt->execute();
+    $pending_payments_result = $pending_payments_stmt->get_result();
+    $pending_payments = $pending_payments_result->fetch_assoc()['total'] ?? 0;
+    $pending_payments_stmt->close();
+
+    // Class Capacity Utilization
+    $capacity_stmt = $conn->prepare("
+        SELECT 
+            AVG((slots_total - slots_available) / slots_total * 100) as avg_utilization,
+            SUM(CASE WHEN slots_available = 0 THEN 1 ELSE 0 END) as full_classes,
+            SUM(CASE WHEN slots_available > 0 AND slots_available < slots_total THEN 1 ELSE 0 END) as partial_classes,
+            SUM(CASE WHEN slots_available = slots_total THEN 1 ELSE 0 END) as empty_classes
+        FROM classes 
+        WHERE start_time >= NOW() 
+        AND status = 'scheduled'
+    ");
+    $capacity_stmt->execute();
+    $capacity_result = $capacity_stmt->get_result();
+    $capacity_stats = $capacity_result->fetch_assoc() ?: [
+        'avg_utilization' => 0, 
+        'full_classes' => 0, 
+        'partial_classes' => 0, 
+        'empty_classes' => 0
     ];
-    
-    // Revenue data with prepared statement
-    $stmt = $conn->prepare("
-        SELECT p.payment_date, u.name as student_name, p.amount, p.payment_method, p.status
-        FROM payments p 
-        LEFT JOIN users u ON p.user_id = u.id 
-        WHERE p.payment_date BETWEEN ? AND ?
+    $capacity_stmt->close();
+
+    // Get upcoming classes list
+    $upcoming_classes_stmt = $conn->prepare("
+        SELECT c.*, i.name as instructor_name,
+               (c.slots_total - c.slots_available) as booked_slots
+        FROM classes c
+        LEFT JOIN instructors i ON c.instructor_id = i.id
+        WHERE c.start_time >= NOW() 
+        AND c.status = 'scheduled'
+        ORDER BY c.start_time ASC
+        LIMIT 5
+    ");
+    $upcoming_classes_stmt->execute();
+    $upcoming_classes_result = $upcoming_classes_stmt->get_result();
+    $upcoming_classes = $upcoming_classes_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $upcoming_classes_stmt->close();
+
+    // Get recent bookings
+    $recent_bookings_stmt = $conn->prepare("
+        SELECT b.*, u.name as student_name, c.title as class_name,
+               p.status as payment_status, p.amount
+        FROM bookings b
+        JOIN users u ON b.user_id = u.id
+        JOIN classes c ON b.class_id = c.id
+        LEFT JOIN payments p ON p.booking_id = b.id
+        ORDER BY b.created_at DESC
+        LIMIT 6
+    ");
+    $recent_bookings_stmt->execute();
+    $recent_bookings_result = $recent_bookings_stmt->get_result();
+    $recent_bookings = $recent_bookings_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $recent_bookings_stmt->close();
+
+    // Get recent payments
+    $recent_payments_stmt = $conn->prepare("
+        SELECT p.*, u.name as student_name, b.child_name
+        FROM payments p
+        LEFT JOIN users u ON p.user_id = u.id
+        LEFT JOIN bookings b ON p.booking_id = b.id
         ORDER BY p.payment_date DESC
+        LIMIT 5
     ");
-    
-    if (!$stmt) {
-        return $report; // Return empty report on error
-    }
-    
-    $end_date_time = $end_date . ' 23:59:59';
-    $stmt->bind_param('ss', $start_date, $end_date_time);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result) {
-        $revenue = $result->fetch_all(MYSQLI_ASSOC);
-        // Sanitize output data
-        foreach ($revenue as &$row) {
-            $row['student_name'] = htmlspecialchars($row['student_name'] ?? '');
-            $row['payment_method'] = htmlspecialchars($row['payment_method'] ?? '');
-            $row['status'] = htmlspecialchars($row['status'] ?? '');
-        }
-        $report['data'] = $revenue;
-    }
-    $stmt->close();
-    
-    // Summary with prepared statements
-    $total_revenue = 0;
-    $stmt = $conn->prepare("
-        SELECT COALESCE(SUM(amount), 0) as total 
+    $recent_payments_stmt->execute();
+    $recent_payments_result = $recent_payments_stmt->get_result();
+    $recent_payments = $recent_payments_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $recent_payments_stmt->close();
+
+    // Get top instructors by bookings
+    $top_instructors_stmt = $conn->prepare("
+        SELECT i.*, 
+               COUNT(b.id) as total_bookings,
+               COUNT(DISTINCT c.id) as total_classes
+        FROM instructors i
+        LEFT JOIN classes c ON c.instructor_id = i.id
+        LEFT JOIN bookings b ON b.class_id = c.id
+        WHERE i.status = 'active'
+        GROUP BY i.id
+        ORDER BY total_bookings DESC
+        LIMIT 4
+    ");
+    $top_instructors_stmt->execute();
+    $top_instructors_result = $top_instructors_stmt->get_result();
+    $top_instructors = $top_instructors_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $top_instructors_stmt->close();
+
+    // Get class distribution by age group
+    $class_distribution_stmt = $conn->prepare("
+        SELECT age_group, COUNT(*) as count
+        FROM classes
+        WHERE start_time >= NOW()
+        GROUP BY age_group
+        ORDER BY count DESC
+    ");
+    $class_distribution_stmt->execute();
+    $class_distribution_result = $class_distribution_stmt->get_result();
+    $class_distribution = $class_distribution_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $class_distribution_stmt->close();
+
+    // Calculate monthly revenue for chart
+    $monthly_revenue_stmt = $conn->prepare("
+        SELECT 
+            MONTH(payment_date) as month,
+            YEAR(payment_date) as year,
+            COALESCE(SUM(amount), 0) as total
         FROM payments 
-        WHERE status = 'paid' AND payment_date BETWEEN ? AND ?
+        WHERE status = 'paid'
+        AND payment_date >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        GROUP BY YEAR(payment_date), MONTH(payment_date)
+        ORDER BY year, month
     ");
-    if ($stmt) {
-        $stmt->bind_param('ss', $start_date, $end_date_time);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result) {
-            $total_revenue = $result->fetch_assoc()['total'] ?? 0;
-        }
-        $stmt->close();
-    }
+    $monthly_revenue_stmt->execute();
+    $monthly_revenue_result = $monthly_revenue_stmt->get_result();
+    $monthly_revenue_data = $monthly_revenue_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $monthly_revenue_stmt->close();
+
+    // Prepare chart data
+    $months = [];
+    $revenue_data = [];
+    $month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     
-    $pending_payments = 0;
-    $stmt = $conn->prepare("
-        SELECT COALESCE(SUM(amount), 0) as total 
-        FROM payments 
-        WHERE status = 'pending' AND payment_date BETWEEN ? AND ?
+    for ($i = 5; $i >= 0; $i--) {
+        $date = new DateTime("first day of -$i months");
+        $months[] = $month_names[$date->format('n') - 1];
+        $revenue_data[] = 0;
+    }
+
+    foreach ($monthly_revenue_data as $row) {
+        $date = new DateTime($row['year'] . '-' . str_pad($row['month'], 2, '0', STR_PAD_LEFT) . '-01');
+        $diff = (new DateTime('first day of -5 months'))->diff($date)->m;
+        if ($diff >= 0 && $diff <= 5) {
+            $revenue_data[$diff] = (float)$row['total'];
+        }
+    }
+
+    // Calculate monthly bookings for chart
+    $monthly_bookings_stmt = $conn->prepare("
+        SELECT 
+            MONTH(created_at) as month,
+            YEAR(created_at) as year,
+            COUNT(*) as total
+        FROM bookings 
+        WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        GROUP BY YEAR(created_at), MONTH(created_at)
+        ORDER BY year, month
     ");
-    if ($stmt) {
-        $stmt->bind_param('ss', $start_date, $end_date_time);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        if ($result) {
-            $pending_payments = $result->fetch_assoc()['total'] ?? 0;
+    $monthly_bookings_stmt->execute();
+    $monthly_bookings_result = $monthly_bookings_stmt->get_result();
+    $monthly_bookings_data = $monthly_bookings_result->fetch_all(MYSQLI_ASSOC) ?: [];
+    $monthly_bookings_stmt->close();
+
+    // Prepare bookings chart data
+    $bookings_data = array_fill(0, 6, 0);
+    
+    foreach ($monthly_bookings_data as $row) {
+        $date = new DateTime($row['year'] . '-' . str_pad($row['month'], 2, '0', STR_PAD_LEFT) . '-01');
+        $diff = (new DateTime('first day of -5 months'))->diff($date)->m;
+        if ($diff >= 0 && $diff <= 5) {
+            $bookings_data[$diff] = (int)$row['total'];
         }
-        $stmt->close();
     }
-    
-    $report['summary'] = [
-        'Total Revenue' => '$' . number_format($total_revenue, 2),
-        'Pending Payments' => '$' . number_format($pending_payments, 2),
-        'Total Transactions' => count($report['data'])
-    ];
-    
-    return $report;
+
+} catch (Exception $e) {
+    error_log("Admin dashboard query error: " . $e->getMessage());
+    // Initialize empty values if queries fail
+    $total_students = $total_instructors = $active_classes = $total_bookings = $today_bookings = 0;
+    $total_revenue = $today_revenue = $pending_bookings = $pending_payments = 0;
+    $capacity_stats = ['avg_utilization' => 0, 'full_classes' => 0, 'partial_classes' => 0, 'empty_classes' => 0];
+    $upcoming_classes = $recent_bookings = $recent_payments = $top_instructors = $class_distribution = [];
+    $months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    $revenue_data = $bookings_data = array_fill(0, 6, 0);
+    $error_msg = "Unable to load dashboard data. Please try again later.";
 }
 
-function generateAttendanceReport($conn, $start_date, $end_date) {
-    $report = [
-        'title' => 'Attendance Report',
-        'period' => "$start_date to $end_date",
-        'headers' => ['Class', 'Instructor', 'Date', 'Total Slots', 'Booked', 'Attendance Rate'],
-        'data' => [],
-        'summary' => []
-    ];
-    
-    $stmt = $conn->prepare("
-        SELECT c.title, i.name as instructor, c.start_time, c.slots_total, c.slots_available
-        FROM classes c 
-        LEFT JOIN instructors i ON c.instructor_id = i.id 
-        WHERE c.start_time BETWEEN ? AND ?
-        ORDER BY c.start_time DESC
-    ");
-    
-    if (!$stmt) {
-        return $report;
-    }
-    
-    $end_date_time = $end_date . ' 23:59:59';
-    $stmt->bind_param('ss', $start_date, $end_date_time);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $classes = [];
-    
-    if ($result) {
-        $classes = $result->fetch_all(MYSQLI_ASSOC);
-    }
-    $stmt->close();
-    
-    foreach ($classes as $class) {
-        $booked = $class['slots_total'] - $class['slots_available'];
-        $attendance_rate = $class['slots_total'] > 0 ? 
-            (($booked / $class['slots_total']) * 100) : 0;
-            
-        $report['data'][] = [
-            'title' => htmlspecialchars($class['title'] ?? ''),
-            'instructor' => htmlspecialchars($class['instructor'] ?? ''),
-            'start_time' => date('M j, Y', strtotime($class['start_time'])),
-            'slots_total' => $class['slots_total'],
-            'booked' => $booked,
-            'attendance_rate' => number_format($attendance_rate, 1) . '%'
-        ];
-    }
-    
-    // Summary
-    $total_classes = count($classes);
-    $total_slots = array_sum(array_column($report['data'], 'slots_total'));
-    $total_booked = array_sum(array_column($report['data'], 'booked'));
-    $avg_attendance = $total_slots > 0 ? ($total_booked / $total_slots) * 100 : 0;
-    
-    $report['summary'] = [
-        'Total Classes' => $total_classes,
-        'Total Slots' => $total_slots,
-        'Total Bookings' => $total_booked,
-        'Average Attendance' => number_format($avg_attendance, 1) . '%'
-    ];
-    
-    return $report;
+// Get admin user info
+$user = [];
+$user_stmt = $conn->prepare("SELECT name, email, phone FROM users WHERE id = ? AND role = 'admin'");
+if ($user_stmt) {
+    $user_stmt->bind_param("i", $admin_id);
+    $user_stmt->execute();
+    $user_result = $user_stmt->get_result();
+    $user = $user_result->fetch_assoc() ?: [];
+    $user_stmt->close();
 }
 
-function generateStudentReport($conn, $start_date, $end_date) {
-    $report = [
-        'title' => 'Student Activity Report',
-        'period' => "$start_date to $end_date",
-        'headers' => ['Student', 'Email', 'Registration Date', 'Total Bookings'],
-        'data' => [],
-        'summary' => []
-    ];
-    
-    $stmt = $conn->prepare("
-        SELECT u.name, u.email, u.created_at, 
-               COUNT(b.id) as total_bookings
-        FROM users u 
-        LEFT JOIN bookings b ON u.id = b.user_id 
-        WHERE u.role = 'student' AND u.created_at BETWEEN ? AND ?
-        GROUP BY u.id, u.name, u.email, u.created_at
-        ORDER BY u.created_at DESC
-    ");
-    
-    if (!$stmt) {
-        return $report;
-    }
-    
-    $end_date_time = $end_date . ' 23:59:59';
-    $stmt->bind_param('ss', $start_date, $end_date_time);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $students = [];
-    
-    if ($result) {
-        $students = $result->fetch_all(MYSQLI_ASSOC);
-        // Sanitize output data
-        foreach ($students as &$student) {
-            $student['name'] = htmlspecialchars($student['name'] ?? '');
-            $student['email'] = htmlspecialchars($student['email'] ?? '');
+// Get current date and time
+$current_date = date('l, F j, Y');
+$current_time = date('g:i A');
+
+// Get school info from settings
+$school_name = "Elite Swimming Academy";
+$school_email = "admin@aquaflow.com";
+
+$settings_stmt = $conn->prepare("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('school_name', 'school_email')");
+if ($settings_stmt) {
+    $settings_stmt->execute();
+    $settings_result = $settings_stmt->get_result();
+    while ($setting = $settings_result->fetch_assoc()) {
+        if ($setting['setting_key'] == 'school_name') {
+            $school_name = $setting['setting_value'];
+        } elseif ($setting['setting_key'] == 'school_email') {
+            $school_email = $setting['setting_value'];
         }
     }
-    $stmt->close();
-    
-    $report['data'] = $students;
-    
-    // Summary
-    $total_students = count($students);
-    $total_bookings = array_sum(array_column($students, 'total_bookings'));
-    $avg_bookings = $total_students > 0 ? $total_bookings / $total_students : 0;
-    
-    $report['summary'] = [
-        'Total Students' => $total_students,
-        'Total Bookings' => $total_bookings,
-        'Average Bookings per Student' => number_format($avg_bookings, 1)
-    ];
-    
-    return $report;
+    $settings_stmt->close();
 }
 
-function generateClassReport($conn, $start_date, $end_date) {
-    $report = [
-        'title' => 'Class Performance Report',
-        'period' => "$start_date to $end_date",
-        'headers' => ['Class Name', 'Age Group', 'Instructor', 'Schedule', 'Bookings', 'Revenue'],
-        'data' => [],
-        'summary' => []
-    ];
-    
-    $stmt = $conn->prepare("
-        SELECT c.title, c.age_group, i.name as instructor, c.start_time, c.end_time,
-               (c.slots_total - c.slots_available) as bookings,
-               COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0) as revenue
-        FROM classes c 
-        LEFT JOIN instructors i ON c.instructor_id = i.id 
-        LEFT JOIN bookings b ON c.id = b.class_id 
-        LEFT JOIN payments p ON b.user_id = p.user_id
-        WHERE c.start_time BETWEEN ? AND ?
-        GROUP BY c.id, c.title, c.age_group, i.name, c.start_time, c.end_time, c.slots_total, c.slots_available
-        ORDER BY revenue DESC
-    ");
-    
-    if (!$stmt) {
-        return $report;
-    }
-    
-    $end_date_time = $end_date . ' 23:59:59';
-    $stmt->bind_param('ss', $start_date, $end_date_time);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $classes = [];
-    
-    if ($result) {
-        $classes = $result->fetch_all(MYSQLI_ASSOC);
-    }
-    $stmt->close();
-    
-    foreach ($classes as $class) {
-        $report['data'][] = [
-            'title' => htmlspecialchars($class['title'] ?? ''),
-            'age_group' => htmlspecialchars($class['age_group'] ?? ''),
-            'instructor' => htmlspecialchars($class['instructor'] ?? ''),
-            'schedule' => date('M j, Y g:i A', strtotime($class['start_time'])),
-            'bookings' => $class['bookings'] ?? 0,
-            'revenue' => '$' . number_format($class['revenue'] ?? 0, 2)
-        ];
-    }
-    
-    // Summary
-    $total_classes = count($classes);
-    $total_revenue = array_sum(array_column($classes, 'revenue'));
-    $total_bookings = array_sum(array_column($classes, 'bookings'));
-    
-    $report['summary'] = [
-        'Total Classes' => $total_classes,
-        'Total Revenue' => '$' . number_format($total_revenue, 2),
-        'Total Bookings' => $total_bookings,
-        'Average Revenue per Class' => '$' . number_format($total_revenue / max($total_classes, 1), 2)
-    ];
-    
-    return $report;
-}
-
-function exportReport($report, $filename, $format) {
-    // Sanitize filename for security
-    $filename = preg_replace('/[^a-zA-Z0-9_-]/', '_', $filename);
-    
-    if ($format === 'csv') {
-        header('Content-Type: text/csv; charset=UTF-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
-        header('Cache-Control: private, max-age=0, must-revalidate');
-        
-        $output = fopen('php://output', 'w');
-        
-        // Add UTF-8 BOM for Excel compatibility
-        fwrite($output, "\xEF\xBB\xBF");
-        
-        // Add title and period
-        fputcsv($output, [htmlspecialchars_decode($report['title'])]);
-        fputcsv($output, ['Period:', htmlspecialchars_decode($report['period'])]);
-        fputcsv($output, []); // Empty line
-        
-        // Add headers
-        fputcsv($output, array_map('htmlspecialchars_decode', $report['headers']));
-        
-        // Add data
-        foreach ($report['data'] as $row) {
-            fputcsv($output, array_map('htmlspecialchars_decode', array_values($row)));
-        }
-        
-        // Add summary
-        fputcsv($output, []); // Empty line
-        fputcsv($output, ['Summary']);
-        foreach ($report['summary'] as $key => $value) {
-            fputcsv($output, [htmlspecialchars_decode($key), htmlspecialchars_decode($value)]);
-        }
-        
-        fclose($output);
-        exit;
-        
-    } elseif ($format === 'pdf') {
-        // Note: For production, use a proper PDF library like TCPDF or Dompdf
-        // This is a simplified HTML output for demonstration
-        header('Content-Type: application/pdf');
-        header('Content-Disposition: attachment; filename="' . $filename . '.pdf"');
-        
-        // In production, you would use:
-        // require_once('../vendor/autoload.php');
-        // $pdf = new TCPDF();
-        // ... generate PDF content
-        
-        // For now, output HTML that can be saved as PDF by browser
-        $html = '<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>' . htmlspecialchars($report['title']) . '</title>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                h1 { color: #333; }
-                table { border-collapse: collapse; width: 100%; margin: 20px 0; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; }
-            </style>
-        </head>
-        <body>
-            <h1>' . htmlspecialchars($report['title']) . '</h1>
-            <p><strong>Period:</strong> ' . htmlspecialchars($report['period']) . '</p>
-            
-            <table>
-                <tr>';
-        foreach ($report['headers'] as $header) {
-            $html .= '<th>' . htmlspecialchars($header) . '</th>';
-        }
-        $html .= '</tr>';
-        
-        foreach ($report['data'] as $row) {
-            $html .= '<tr>';
-            foreach ($row as $cell) {
-                $html .= '<td>' . htmlspecialchars($cell) . '</td>';
-            }
-            $html .= '</tr>';
-        }
-        $html .= '</table>
-            
-            <h2>Summary</h2>';
-        foreach ($report['summary'] as $key => $value) {
-            $html .= '<p><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars($value) . '</p>';
-        }
-        $html .= '</body></html>';
-        
-        echo $html;
-        exit;
-        
-    } elseif ($format === 'excel') {
-        // Excel export (HTML table for Excel)
-        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '.xls"');
-        header('Cache-Control: private, max-age=0, must-revalidate');
-        
-        echo '<!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>' . htmlspecialchars($report['title']) . '</title>
-            <style>
-                table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                th { background-color: #f2f2f2; font-weight: bold; }
-            </style>
-        </head>
-        <body>';
-        
-        echo '<h1>' . htmlspecialchars($report['title']) . '</h1>';
-        echo '<p><strong>Period:</strong> ' . htmlspecialchars($report['period']) . '</p>';
-        
-        echo '<table border="1">';
-        echo '<tr>';
-        foreach ($report['headers'] as $header) {
-            echo '<th>' . htmlspecialchars($header) . '</th>';
-        }
-        echo '</tr>';
-        
-        foreach ($report['data'] as $row) {
-            echo '<tr>';
-            foreach ($row as $cell) {
-                echo '<td>' . htmlspecialchars($cell) . '</td>';
-            }
-            echo '</tr>';
-        }
-        echo '</table>';
-        
-        echo '<h2>Summary</h2>';
-        foreach ($report['summary'] as $key => $value) {
-            echo '<p><strong>' . htmlspecialchars($key) . ':</strong> ' . htmlspecialchars($value) . '</p>';
-        }
-        
-        echo '</body></html>';
-        exit;
-    }
-}
-
-// Get default dates (last 30 days)
-$default_start = date('Y-m-d', strtotime('-30 days'));
-$default_end = date('Y-m-d');
-
-// Check for preview data
-$preview_data = null;
-if (isset($_SESSION['report_preview'])) {
-    $preview_data = $_SESSION['report_preview'];
-    // Clean session data
-    unset($_SESSION['report_preview']);
+// Load success message from session
+if (isset($_SESSION['success_msg'])) {
+    $success_msg = $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
 }
 ?>
 <!doctype html>
@@ -518,7 +298,7 @@ if (isset($_SESSION['report_preview'])) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reports & Analytics - Admin Dashboard</title>
+  <title>Admin Dashboard - <?= htmlspecialchars($school_name) ?></title>
   
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -526,8 +306,8 @@ if (isset($_SESSION['report_preview'])) {
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
   
-  <!-- Custom CSS -->
-  <link href="../css/style.css" rel="stylesheet">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   
   <style>
     :root{
@@ -565,6 +345,67 @@ if (isset($_SESSION['report_preview'])) {
       box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
     }
     
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: white;
+      text-decoration: none;
+      font-size: 20px;
+      font-weight: 600;
+    }
+    
+    .sidebar-brand i {
+      font-size: 24px;
+      color: #60a5fa;
+    }
+    
+    .sidebar-nav {
+      padding: 20px 0;
+    }
+    
+    .nav-item {
+      margin-bottom: 4px;
+    }
+    
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      transition: all 0.3s ease;
+      border-left: 3px solid transparent;
+    }
+    
+    .nav-link:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      border-left-color: #60a5fa;
+    }
+    
+    .nav-link.active {
+      background: rgba(96, 165, 250, 0.1);
+      color: white;
+      border-left-color: #60a5fa;
+    }
+    
+    .nav-link i {
+      width: 20px;
+      text-align: center;
+    }
+    
+    .nav-text {
+      font-size: 14px;
+    }
+    
+    /* Main Content */
     .main-content {
       flex: 1;
       margin-left: 260px;
@@ -631,85 +472,490 @@ if (isset($_SESSION['report_preview'])) {
       font-weight: 600;
       font-size: 0.875rem;
     }
-
+    
+    .user-info .fw-medium {
+      font-size: 0.875rem;
+    }
+    
+    .user-info small {
+      font-size: 0.75rem;
+      color: #64748b;
+    }
+    
+    /* Dashboard Container */
     .dashboard-container {
       padding: 28px;
-      max-width: 1200px;
-      margin: 0 auto 80px;
+      max-width: 1400px;
+      margin: 0 auto;
     }
-
-    .card {
-      background: var(--card);
-      border-radius: var(--radius);
+    
+    /* Welcome Card */
+    .welcome-card {
+      background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+      border-radius: 16px;
+      padding: 30px;
+      color: white;
+      margin-bottom: 30px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .welcome-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
+      border-radius: 50%;
+    }
+    
+    .welcome-content {
+      position: relative;
+      z-index: 2;
+    }
+    
+    .welcome-content h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    
+    .welcome-content p {
+      font-size: 1rem;
+      opacity: 0.9;
+      margin-bottom: 20px;
+      max-width: 600px;
+    }
+    
+    .date-time-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 8px 16px;
+      border-radius: 50px;
+      font-size: 0.875rem;
+      backdrop-filter: blur(10px);
+    }
+    
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
       box-shadow: var(--shadow);
-      border: none;
+      border: 1px solid #e2e8f0;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+    }
+    
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #4361ee, #3a0ca3);
+    }
+    
+    .stat-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: white;
+    }
+    
+    .stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%); }
+    .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, #10b981 0%, #047857 100%); }
+    .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+    .stat-card:nth-child(5) .stat-icon { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    .stat-card:nth-child(6) .stat-icon { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+    
+    .stat-content h3 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 5px;
+      color: #1e293b;
+    }
+    
+    .stat-content p {
+      color: #64748b;
+      font-size: 14px;
+      margin: 0;
+    }
+    
+    .stat-subtext {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 5px;
+    }
+    
+    /* Quick Stats */
+    .quick-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    
+    .quick-stat {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      border: 1px solid #e2e8f0;
+      transition: all 0.3s ease;
+    }
+    
+    .quick-stat:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    .quick-stat i {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #4361ee;
+    }
+    
+    .quick-stat h4 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+      color: #1e293b;
+    }
+    
+    .quick-stat p {
+      color: #64748b;
+      font-size: 14px;
+      margin: 5px 0 0 0;
+    }
+    
+    /* Charts Grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 24px;
+      margin-bottom: 30px;
+    }
+    
+    @media (max-width: 992px) {
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .chart-container {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid #e2e8f0;
+    }
+    
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       margin-bottom: 20px;
     }
-
-    .card-header {
-      background: transparent;
-      border-bottom: none;
-      padding: 18px 20px;
+    
+    .chart-header h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      color: #1e293b;
     }
-
-    .card-body { padding: 20px; }
-
-    .page-title {
-      margin-bottom: 18px;
-      font-weight: 700;
-      font-size: 20px;
+    
+    .chart-wrapper {
+      position: relative;
+      height: 250px;
     }
-
-    .report-grid {
+    
+    /* Content Grid */
+    .content-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 30px;
     }
-
-    .report-type-card {
-      background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,250,0.9));
+    
+    @media (max-width: 1200px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    /* Panel Styling */
+    .panel {
+      background: white;
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 24px;
+    }
+    
+    .panel-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .panel-header h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      color: #1e293b;
+    }
+    
+    .panel-header .btn-link {
+      color: #4361ee;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.3s ease;
+    }
+    
+    .panel-header .btn-link:hover {
+      color: #3a0ca3;
+      gap: 8px;
+    }
+    
+    .panel-body {
+      padding: 24px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    /* Lists */
+    .class-list, .booking-list, .payment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .class-item, .booking-item, .payment-item {
+      display: flex;
+      align-items: center;
+      padding: 16px;
+      background: #f8fafc;
       border-radius: 10px;
-      padding: 18px;
-      text-align: left;
-      cursor: pointer;
-      transition: transform .18s ease, box-shadow .18s ease;
-      border: 1px solid rgba(15,23,42,0.04);
-      display:flex;
-      gap:12px;
-      align-items:center;
+      transition: all 0.3s ease;
+      border-left: 4px solid #4361ee;
     }
-
-    .report-type-card .icon {
-      width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;color:white;
+    
+    .class-item:hover, .booking-item:hover, .payment-item:hover {
+      background: #f1f5f9;
+      transform: translateX(3px);
     }
-
-    .report-type-card .meta { flex:1; }
-    .report-type-card h6 { margin:0;font-size:16px;font-weight:600; }
-    .report-type-card p { margin:4px 0 0;color:var(--muted);font-size:13px }
-
-    .report-type-card:hover { transform: translateY(-6px); box-shadow: 0 12px 30px rgba(2,6,23,0.08); }
-
-    .report-type-card.active { border-color: rgba(37,99,235,0.12); box-shadow:0 10px 28px rgba(37,99,235,0.06); }
-
-    .financial .icon { background: linear-gradient(135deg,#eff6ff,#bfdbfe); color:#1e40af; }
-    .attendance .icon { background: linear-gradient(135deg,#ecfdf5,#bbf7d0); color:#166534; }
-    .student .icon { background: linear-gradient(135deg,#fff7ed,#fde68a); color:#92400e; }
-    .class .icon { background: linear-gradient(135deg,#fff0f6,#fbcfe8); color:#9f1239; }
-
-    .form-row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    .form-row .col { flex:1; min-width:160px; }
-
-    .export-options { display:flex; gap:10px; }
-    .btn-export { padding:10px 14px; border-radius:10px; border:1px solid rgba(15,23,42,0.06); background:white; cursor:pointer; display:flex; gap:8px; align-items:center; }
-    .btn-export.active { background: linear-gradient(90deg,#eff6ff,#e0f2fe); border-color:rgba(37,99,235,0.16); }
-
-    .preview-card { max-height:420px; overflow:auto; padding:12px; border-radius:10px; background:#fbfdff; border:1px solid rgba(15,23,42,0.03); }
-
-    .summary-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-top:12px; }
-    .summary-item { background:white; padding:12px; border-radius:8px; border:1px solid rgba(15,23,42,0.04); }
-
-    .quick-export .btn { border-radius:10px; padding:12px 18px; }
-
+    
+    .class-info, .booking-info, .payment-info {
+      flex: 1;
+    }
+    
+    .class-info h6, .booking-info h6, .payment-info h6 {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #1e293b;
+      font-size: 14px;
+    }
+    
+    .class-meta, .booking-meta, .payment-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: #64748b;
+    }
+    
+    .class-meta i, .booking-meta i, .payment-meta i {
+      color: #4361ee;
+      margin-right: 4px;
+    }
+    
+    .class-status, .booking-status, .payment-status {
+      min-width: 100px;
+      text-align: right;
+    }
+    
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .status-scheduled { background: rgba(67, 97, 238, 0.1); color: #4361ee; }
+    .status-confirmed { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .status-pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .status-paid { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .status-failed { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+    
+    .capacity-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(67, 97, 238, 0.1);
+      color: #4361ee;
+    }
+    
+    /* Instructor Cards */
+    .instructor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    
+    .instructor-card {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      border: 1px solid #e2e8f0;
+      transition: all 0.3s ease;
+    }
+    
+    .instructor-card:hover {
+      background: #f1f5f9;
+      transform: translateY(-3px);
+    }
+    
+    .instructor-avatar {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #4361ee 0%, #3a0ca3 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 20px;
+      margin: 0 auto 12px;
+    }
+    
+    .instructor-info h6 {
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #1e293b;
+      font-size: 14px;
+    }
+    
+    .instructor-info p {
+      font-size: 12px;
+      color: #64748b;
+      margin: 0 0 8px 0;
+    }
+    
+    .instructor-stats {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      font-size: 12px;
+    }
+    
+    .instructor-stat {
+      text-align: center;
+    }
+    
+    .instructor-stat span {
+      display: block;
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 14px;
+    }
+    
+    /* Capacity Stats */
+    .capacity-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    
+    .capacity-stat {
+      text-align: center;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    
+    .capacity-stat h5 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+    
+    .capacity-stat:nth-child(1) h5 { color: #10b981; }
+    .capacity-stat:nth-child(2) h5 { color: #f59e0b; }
+    .capacity-stat:nth-child(3) h5 { color: #ef4444; }
+    .capacity-stat:nth-child(4) h5 { color: #4361ee; }
+    
+    .capacity-stat p {
+      font-size: 12px;
+      color: #64748b;
+      margin: 0;
+    }
+    
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #64748b;
+    }
+    
+    .empty-state i {
+      font-size: 48px;
+      margin-bottom: 15px;
+      opacity: 0.3;
+    }
+    
+    .empty-state h5 {
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #475569;
+      font-size: 16px;
+    }
+    
+    .empty-state p {
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    
+    /* Responsive */
     @media (max-width: 768px) {
       .sidebar {
         width: 70px;
@@ -719,11 +965,74 @@ if (isset($_SESSION['report_preview'])) {
         margin-left: 70px;
       }
       
-      .report-grid {
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      .nav-text, .sidebar-brand span {
+        display: none;
       }
       
-      .form-row { flex-direction:column; }
+      .sidebar-brand {
+        justify-content: center;
+      }
+      
+      .welcome-card {
+        padding: 20px;
+      }
+      
+      .welcome-content h1 {
+        font-size: 2rem;
+      }
+      
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .quick-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (max-width: 576px) {
+      .quick-stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .dashboard-container {
+        padding: 16px;
+      }
+      
+      .topbar {
+        padding: 1rem;
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+      }
+      
+      .topbar-actions {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+    
+    /* Custom Scrollbar */
+    .panel-body::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .panel-body::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 10px;
+    }
+    
+    .panel-body::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+    
+    .panel-body::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
     }
   </style>
 </head>
@@ -734,13 +1043,13 @@ if (isset($_SESSION['report_preview'])) {
       <div class="sidebar-header">
         <a href="index.php" class="sidebar-brand">
           <i class="bi bi-droplet-half"></i>
-          <span>AquaFlow Pro</span>
+          <span><?= htmlspecialchars($school_name) ?></span>
         </a>
       </div>
       
       <nav class="sidebar-nav">
         <div class="nav-item">
-          <a href="index.php" class="nav-link">
+          <a href="index.php" class="nav-link active">
             <i class="bi bi-speedometer2"></i>
             <span class="nav-text">Dashboard</span>
           </a>
@@ -776,7 +1085,7 @@ if (isset($_SESSION['report_preview'])) {
           </a>
         </div>
         <div class="nav-item">
-          <a href="analytics.php" class="nav-link active">
+          <a href="analytics.php" class="nav-link">
             <i class="bi bi-graph-up"></i>
             <span class="nav-text">Analytics</span>
           </a>
@@ -788,10 +1097,12 @@ if (isset($_SESSION['report_preview'])) {
           </a>
         </div>
         <div class="nav-item mt-4">
-          <a href="logout.php" class="nav-link text-danger">
-            <i class="bi bi-box-arrow-right"></i>
-            <span class="nav-text">Logout</span>
-          </a>
+          <form method="post" action="logout.php" style="margin:0;">
+            <button type="submit" name="confirm_logout" value="1" class="nav-link text-danger" style="background:none;border:none;width:100%;text-align:left;padding:12px 16px;">
+              <i class="bi bi-box-arrow-right"></i>
+              <span class="nav-text">Logout</span>
+            </button>
+          </form>
         </div>
       </nav>
     </aside>
@@ -801,8 +1112,8 @@ if (isset($_SESSION['report_preview'])) {
       <!-- Topbar -->
       <header class="topbar">
         <div class="page-title">
-          <h1>Reports & Analytics</h1>
-          <p>Welcome back, <?= htmlspecialchars($user['name'] ?? 'Admin') ?>! Generate comprehensive reports and export data.</p>
+          <h1>Admin Dashboard</h1>
+          <p>Welcome back, <?= htmlspecialchars($user['name'] ?? 'Admin') ?>! Monitor your swimming academy's performance.</p>
         </div>
         
         <div class="topbar-actions">
@@ -813,13 +1124,13 @@ if (isset($_SESSION['report_preview'])) {
             <ul class="dropdown-menu">
               <li><a class="dropdown-item" href="classes.php?action=new"><i class="bi bi-calendar-plus me-2"></i> Add New Class</a></li>
               <li><a class="dropdown-item" href="students.php?action=new"><i class="bi bi-person-plus me-2"></i> Add Student</a></li>
-              <li><a class="dropdown-item" href="instructors.php?action=new"><i class="bi bi-person-badge me-2"></i> Add Instructor</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="analytics.php"><i class="bi bi-graph-up me-2"></i> View Reports</a></li>
             </ul>
           </div>
-          
           <div class="user-profile">
             <div class="user-avatar">
-              <?= strtoupper(substr($user['name'] ?? 'A', 0, 1)) ?>
+              <?= isset($user['name']) ? strtoupper(substr($user['name'], 0, 1)) : 'A' ?>
             </div>
             <div class="user-info">
               <div class="fw-medium"><?= htmlspecialchars($user['name'] ?? 'Admin') ?></div>
@@ -831,182 +1142,342 @@ if (isset($_SESSION['report_preview'])) {
       </header>
 
       <div class="dashboard-container">
-        <!-- Header Section -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <h2 class="page-title">Reports & Data Export</h2>
-            <p class="text-muted mb-0">Generate comprehensive reports and export data in various formats</p>
-          </div>
-        </div>
-
-        <!-- Report Type Selection -->
-        <div class="card">
-          <div class="card-body">
-            <div class="report-grid">
-              <div class="report-type-card active" data-report-type="financial" id="rt-financial">
-                <div class="icon financial"><i class="bi bi-currency-dollar"></i></div>
-                <div class="meta">
-                  <h6>Financial Report</h6>
-                  <p>Revenue, payments, and financial transactions</p>
-                </div>
-              </div>
-
-              <div class="report-type-card" data-report-type="attendance" id="rt-attendance">
-                <div class="icon attendance"><i class="bi bi-people"></i></div>
-                <div class="meta">
-                  <h6>Attendance Report</h6>
-                  <p>Class attendance and booking statistics</p>
-                </div>
-              </div>
-
-              <div class="report-type-card" data-report-type="student" id="rt-student">
-                <div class="icon student"><i class="bi bi-person"></i></div>
-                <div class="meta">
-                  <h6>Student Report</h6>
-                  <p>Student activity and registration data</p>
-                </div>
-              </div>
-
-              <div class="report-type-card" data-report-type="class" id="rt-class">
-                <div class="icon class"><i class="bi bi-calendar-week"></i></div>
-                <div class="meta">
-                  <h6>Class Report</h6>
-                  <p>Class performance and scheduling</p>
-                </div>
-              </div>
+        <!-- Welcome Banner -->
+        <div class="welcome-card">
+          <div class="welcome-content">
+            <h1>System Overview</h1>
+            <p>Monitor your swim academy's performance, track key metrics, and manage operations efficiently.</p>
+            <div class="date-time-badge">
+              <i class="bi bi-calendar-check"></i>
+              <span id="currentDate"><?= $current_date ?></span>
+              <i class="bi bi-clock ms-3"></i>
+              <span id="currentTime"><?= $current_time ?></span>
             </div>
           </div>
         </div>
 
-        <!-- Report Configuration -->
-        <div class="card">
-          <div class="card-body">
-            <form method="POST" id="reportForm">
-              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-              <input type="hidden" name="report_type" id="reportType" value="financial">
-              <div class="form-row">
-                <div class="col">
-                  <label class="form-label small">Start Date</label>
-                  <input type="date" class="form-control" name="start_date" value="<?= htmlspecialchars($default_start) ?>" required max="<?= date('Y-m-d') ?>">
-                </div>
-                <div class="col">
-                  <label class="form-label small">End Date</label>
-                  <input type="date" class="form-control" name="end_date" value="<?= htmlspecialchars($default_end) ?>" required max="<?= date('Y-m-d') ?>">
-                </div>
-                <div class="col">
-                  <label class="form-label small">Export Format</label>
-                  <div class="export-options">
-                    <label class="btn-export active" id="exp-csv">
-                      <input type="radio" name="export_format" value="csv" checked hidden>
-                      <i class="bi bi-file-earmark-spreadsheet"></i> CSV
-                    </label>
-                    <label class="btn-export" id="exp-pdf">
-                      <input type="radio" name="export_format" value="pdf" hidden>
-                      <i class="bi bi-file-pdf"></i> PDF
-                    </label>
-                    <label class="btn-export" id="exp-xls">
-                      <input type="radio" name="export_format" value="excel" hidden>
-                      <i class="bi bi-file-excel"></i> Excel
-                    </label>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="mt-4 d-flex gap-2">
-                <button type="submit" name="generate_report" class="btn btn-primary">
-                  <i class="bi bi-download me-2"></i>Generate & Export
-                </button>
-                <button type="button" id="previewReport" class="btn btn-outline-primary">
-                  <i class="bi bi-eye me-2"></i>Preview
-                </button>
-              </div>
-            </form>
+        <!-- Quick Stats -->
+        <div class="quick-stats-grid">
+          <div class="quick-stat">
+            <i class="bi bi-calendar-check"></i>
+            <h4><?= $today_bookings ?></h4>
+            <p>Today's Bookings</p>
+          </div>
+          <div class="quick-stat">
+            <i class="bi bi-currency-dollar"></i>
+            <h4>$<?= number_format($today_revenue, 2) ?></h4>
+            <p>Today's Revenue</p>
+          </div>
+          <div class="quick-stat">
+            <i class="bi bi-clock-history"></i>
+            <h4><?= $pending_bookings ?></h4>
+            <p>Pending Bookings</p>
+          </div>
+          <div class="quick-stat">
+            <i class="bi bi-activity"></i>
+            <h4><?= $pending_payments ?></h4>
+            <p>Pending Payments</p>
           </div>
         </div>
 
-        <!-- Report Preview -->
-        <div class="card" id="previewSection" style="display: <?= $preview_data ? 'block' : 'none' ?>;">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-              <h5 class="mb-0">Report Preview</h5>
-              <button type="button" class="btn btn-sm btn-light" id="closePreview"><i class="bi bi-x-lg"></i></button>
+        <!-- Main Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="bi bi-people"></i>
             </div>
+            <div class="stat-content">
+              <h3><?= $total_students ?></h3>
+              <p>Total Students</p>
+              <div class="stat-subtext">Active accounts</div>
+            </div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="bi bi-person-badge"></i>
+            </div>
+            <div class="stat-content">
+              <h3><?= $total_instructors ?></h3>
+              <p>Active Instructors</p>
+              <div class="stat-subtext">Teaching staff</div>
+            </div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="bi bi-calendar-week"></i>
+            </div>
+            <div class="stat-content">
+              <h3><?= $active_classes ?></h3>
+              <p>Upcoming Classes</p>
+              <div class="stat-subtext">Scheduled sessions</div>
+            </div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="bi bi-ticket-perforated"></i>
+            </div>
+            <div class="stat-content">
+              <h3><?= $total_bookings ?></h3>
+              <p>Total Bookings</p>
+              <div class="stat-subtext">All-time bookings</div>
+            </div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="bi bi-cash-stack"></i>
+            </div>
+            <div class="stat-content">
+              <h3>$<?= number_format($total_revenue, 2) ?></h3>
+              <p>Total Revenue</p>
+              <div class="stat-subtext">All-time income</div>
+            </div>
+          </div>
+          
+          <div class="stat-card">
+            <div class="stat-icon">
+              <i class="bi bi-bar-chart"></i>
+            </div>
+            <div class="stat-content">
+              <h3><?= number_format($capacity_stats['avg_utilization'], 1) ?>%</h3>
+              <p>Class Utilization</p>
+              <div class="stat-subtext">Average occupancy rate</div>
+            </div>
+          </div>
+        </div>
 
-            <div id="previewContent" class="preview-card">
-              <?php if ($preview_data): ?>
-                <h5><?= htmlspecialchars($preview_data['title'] ?? '') ?></h5>
-                <p class="text-muted small">Period: <?= htmlspecialchars($preview_data['period'] ?? '') ?></p>
-                
-                <?php if (!empty($preview_data['data'])): ?>
-                  <div class="table-responsive">
-                    <table class="table table-sm table-hover">
-                      <thead>
-                        <tr>
-                          <?php foreach ($preview_data['headers'] as $header): ?>
-                            <th><?= htmlspecialchars($header) ?></th>
-                          <?php endforeach; ?>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <?php foreach ($preview_data['data'] as $row): ?>
-                          <tr>
-                            <?php foreach ($row as $cell): ?>
-                              <td><?= htmlspecialchars($cell) ?></td>
-                            <?php endforeach; ?>
-                          </tr>
-                        <?php endforeach; ?>
-                      </tbody>
-                    </table>
+        <!-- Charts Section -->
+        <div class="charts-grid">
+          <div class="chart-container">
+            <div class="chart-header">
+              <h3>Revenue Overview</h3>
+              <span class="text-muted" style="font-size: 14px;">Last 6 Months</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="revenueChart"></canvas>
+            </div>
+          </div>
+          
+          <div class="chart-container">
+            <div class="chart-header">
+              <h3>Bookings Trend</h3>
+              <span class="text-muted" style="font-size: 14px;">Last 6 Months</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="bookingsChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Grid -->
+        <div class="content-grid">
+          <!-- Left Column -->
+          <div class="left-column">
+            <!-- Upcoming Classes -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Upcoming Classes</h3>
+                <a href="classes.php" class="btn-link">
+                  View All <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+              <div class="panel-body">
+                <?php if (empty($upcoming_classes)): ?>
+                  <div class="empty-state">
+                    <i class="bi bi-calendar-x"></i>
+                    <p>No upcoming classes scheduled</p>
                   </div>
                 <?php else: ?>
-                  <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> No data available for the selected period.
-                  </div>
-                <?php endif; ?>
-                
-                <?php if (!empty($preview_data['summary'])): ?>
-                  <div class="summary-list">
-                    <?php foreach ($preview_data['summary'] as $key => $value): ?>
-                      <div class="summary-item">
-                        <div class="text-muted small"><?= htmlspecialchars($key) ?></div>
-                        <div class="fw-bold"><?= htmlspecialchars($value) ?></div>
+                  <div class="class-list">
+                    <?php foreach ($upcoming_classes as $class): 
+                      $utilization = $class['slots_total'] > 0 ? 
+                        round(($class['booked_slots'] / $class['slots_total']) * 100) : 0;
+                    ?>
+                      <div class="class-item">
+                        <div class="class-info">
+                          <h6><?= htmlspecialchars($class['title']) ?></h6>
+                          <div class="class-meta">
+                            <span><i class="bi bi-person"></i> <?= htmlspecialchars($class['instructor_name'] ?? 'Unassigned') ?></span>
+                            <span><i class="bi bi-clock"></i> <?= date('M d, g:i A', strtotime($class['start_time'])) ?></span>
+                          </div>
+                        </div>
+                        <div class="class-status">
+                          <span class="capacity-badge"><?= $utilization ?>% Full</span>
+                        </div>
                       </div>
                     <?php endforeach; ?>
                   </div>
                 <?php endif; ?>
-              <?php else: ?>
-                <div class="text-center text-muted">
-                  <i class="bi bi-graph-up" style="font-size: 2.5rem;"></i>
-                  <p class="mb-0 mt-2">No preview available. Generate a report to see preview.</p>
+              </div>
+            </div>
+            
+            <!-- Recent Bookings -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Recent Bookings</h3>
+                <a href="bookings.php" class="btn-link">
+                  View All <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+              <div class="panel-body">
+                <?php if (empty($recent_bookings)): ?>
+                  <div class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <p>No recent bookings</p>
+                  </div>
+                <?php else: ?>
+                  <div class="booking-list">
+                    <?php foreach ($recent_bookings as $booking): ?>
+                      <div class="booking-item">
+                        <div class="booking-info">
+                          <h6><?= htmlspecialchars($booking['student_name']) ?></h6>
+                          <div class="booking-meta">
+                            <span><?= htmlspecialchars($booking['class_name']) ?></span>
+                            <span><i class="bi bi-clock"></i> <?= date('M d', strtotime($booking['created_at'])) ?></span>
+                          </div>
+                        </div>
+                        <div class="booking-status">
+                          <span class="status-badge status-<?= $booking['status'] ?>">
+                            <?= ucfirst($booking['status']) ?>
+                          </span>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Right Column -->
+          <div class="right-column">
+            <!-- Class Capacity Stats -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Class Capacity</h3>
+                <span class="text-muted" style="font-size: 14px;">Current Status</span>
+              </div>
+              <div class="panel-body">
+                <div class="capacity-stats">
+                  <div class="capacity-stat">
+                    <h5><?= $capacity_stats['full_classes'] ?></h5>
+                    <p>Full Classes</p>
+                  </div>
+                  <div class="capacity-stat">
+                    <h5><?= $capacity_stats['partial_classes'] ?></h5>
+                    <p>Partial Classes</p>
+                  </div>
+                  <div class="capacity-stat">
+                    <h5><?= $capacity_stats['empty_classes'] ?></h5>
+                    <p>Empty Classes</p>
+                  </div>
+                  <div class="capacity-stat">
+                    <h5><?= number_format($capacity_stats['avg_utilization'], 1) ?>%</h5>
+                    <p>Avg Utilization</p>
+                  </div>
                 </div>
-              <?php endif; ?>
+                
+                <?php if (!empty($class_distribution)): ?>
+                  <div style="margin-top: 25px;">
+                    <h6 style="font-weight: 600; margin-bottom: 15px; color: #1e293b; font-size: 14px;">Class Distribution by Age Group</h6>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                      <?php foreach ($class_distribution as $group): ?>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="font-size: 14px;"><?= htmlspecialchars($group['age_group'] ?: 'Not Specified') ?></span>
+                          <span class="badge bg-primary"><?= $group['count'] ?></span>
+                        </div>
+                      <?php endforeach; ?>
+                    </div>
+                  </div>
+                <?php endif; ?>
+              </div>
+            </div>
+            
+            <!-- Top Instructors -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Top Instructors</h3>
+                <a href="instructors.php" class="btn-link">
+                  View All <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+              <div class="panel-body">
+                <?php if (empty($top_instructors)): ?>
+                  <div class="empty-state">
+                    <i class="bi bi-person-x"></i>
+                    <p>No instructors data</p>
+                  </div>
+                <?php else: ?>
+                  <div class="instructor-grid">
+                    <?php foreach ($top_instructors as $instructor): ?>
+                      <div class="instructor-card">
+                        <div class="instructor-avatar">
+                          <?= strtoupper(substr($instructor['name'], 0, 1)) ?>
+                        </div>
+                        <div class="instructor-info">
+                          <h6><?= htmlspecialchars($instructor['name']) ?></h6>
+                          <?php if (!empty($instructor['specialization'])): ?>
+                            <p><?= htmlspecialchars($instructor['specialization']) ?></p>
+                          <?php endif; ?>
+                          <div class="instructor-stats">
+                            <div class="instructor-stat">
+                              <span><?= $instructor['total_bookings'] ?></span>
+                              <small>Bookings</small>
+                            </div>
+                            <div class="instructor-stat">
+                              <span><?= $instructor['total_classes'] ?></span>
+                              <small>Classes</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
+            </div>
+            
+            <!-- Recent Payments -->
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Recent Payments</h3>
+                <a href="payments.php" class="btn-link">
+                  View All <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+              <div class="panel-body">
+                <?php if (empty($recent_payments)): ?>
+                  <div class="empty-state">
+                    <i class="bi bi-credit-card"></i>
+                    <p>No recent payments</p>
+                  </div>
+                <?php else: ?>
+                  <div class="payment-list">
+                    <?php foreach ($recent_payments as $payment): ?>
+                      <div class="payment-item">
+                        <div class="payment-info">
+                          <h6><?= htmlspecialchars($payment['student_name'] ?? 'Unknown') ?></h6>
+                          <div class="payment-meta">
+                            <span>$<?= number_format($payment['amount'], 2) ?></span>
+                            <span><i class="bi bi-clock"></i> <?= date('M d', strtotime($payment['payment_date'])) ?></span>
+                          </div>
+                        </div>
+                        <div class="payment-status">
+                          <span class="status-badge status-<?= $payment['status'] ?>">
+                            <?= ucfirst($payment['status']) ?>
+                          </span>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
             </div>
           </div>
         </div>
-
-        <!-- Quick Export Options -->
-        <div class="card quick-export">
-          <div class="card-body">
-            <div class="row g-3">
-              <div class="col-md-4">
-                <a href="export_data.php?type=students&token=<?= urlencode($csrf_token) ?>" class="btn btn-outline-primary w-100">
-                  <i class="bi bi-people me-2"></i>Export Students
-                </a>
-              </div>
-              <div class="col-md-4">
-                <a href="export_data.php?type=classes&token=<?= urlencode($csrf_token) ?>" class="btn btn-outline-primary w-100">
-                  <i class="bi bi-calendar-week me-2"></i>Export Classes
-                </a>
-              </div>
-              <div class="col-md-4">
-                <a href="export_data.php?type=bookings&token=<?= urlencode($csrf_token) ?>" class="btn btn-outline-primary w-100">
-                  <i class="bi bi-clipboard-check me-2"></i>Export Bookings
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </main>
   </div>
@@ -1014,106 +1485,183 @@ if (isset($_SESSION['report_preview'])) {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      // Report type selection
-      const reportCards = document.querySelectorAll('.report-type-card');
-      const reportTypeInput = document.getElementById('reportType');
-      
-      reportCards.forEach(card => {
-        card.addEventListener('click', function() {
-          reportCards.forEach(c => c.classList.remove('active'));
-          this.classList.add('active');
-          reportTypeInput.value = this.dataset.reportType;
+      // Update date and time in real-time
+      function updateDateTime() {
+        const now = new Date();
+        
+        // Format date
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        const dateString = now.toLocaleDateString('en-US', options);
+        
+        // Format time
+        const timeString = now.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
         });
-      });
-      
-      // Export format selection
-      const exportOptions = document.querySelectorAll('.btn-export');
-      exportOptions.forEach(option => {
-        option.addEventListener('click', function() {
-          exportOptions.forEach(o => o.classList.remove('active'));
-          this.classList.add('active');
-          const input = this.querySelector('input');
-          if (input) input.checked = true;
-        });
-      });
-      
-      // Preview functionality
-      const previewBtn = document.getElementById('previewReport');
-      const previewSection = document.getElementById('previewSection');
-      const closePreview = document.getElementById('closePreview');
-      
-      previewBtn.addEventListener('click', function() {
-        const form = document.getElementById('reportForm');
-        const tempForm = document.createElement('form');
-        tempForm.method = 'POST';
-        tempForm.action = 'analytics.php';
         
-        // Copy all form inputs
-        const formData = new FormData(form);
-        for (let [key, value] of formData.entries()) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = key;
-          input.value = value;
-          tempForm.appendChild(input);
-        }
+        // Update elements
+        const dateElement = document.getElementById('currentDate');
+        const timeElement = document.getElementById('currentTime');
         
-        // Add preview indicator
-        const previewInput = document.createElement('input');
-        previewInput.type = 'hidden';
-        previewInput.name = 'generate_report';
-        previewInput.value = '1';
-        tempForm.appendChild(previewInput);
-        
-        // Add CSRF token
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrf_token';
-        csrfInput.value = '<?= htmlspecialchars($csrf_token) ?>';
-        tempForm.appendChild(csrfInput);
-        
-        document.body.appendChild(tempForm);
-        tempForm.submit();
-      });
-      
-      closePreview.addEventListener('click', function() {
-        previewSection.style.display = 'none';
-      });
-
-      // Close preview with Escape
-      document.addEventListener('keydown', function(e){
-        if (e.key === 'Escape' && previewSection.style.display !== 'none') {
-          closePreview.click();
-        }
-      });
-      
-      // Date validation
-      const startDateInput = document.querySelector('input[name="start_date"]');
-      const endDateInput = document.querySelector('input[name="end_date"]');
-      
-      function validateDates() {
-        const startDate = new Date(startDateInput.value);
-        const endDate = new Date(endDateInput.value);
-        
-        if (startDate > endDate) {
-          alert('Start date cannot be after end date.');
-          endDateInput.value = startDateInput.value;
-        }
-        
-        // Limit to 365 days
-        const diffTime = Math.abs(endDate - startDate);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays > 365) {
-          alert('Date range cannot exceed 365 days.');
-          const newEndDate = new Date(startDate);
-          newEndDate.setDate(startDate.getDate() + 365);
-          endDateInput.value = newEndDate.toISOString().split('T')[0];
-        }
+        if (dateElement) dateElement.textContent = dateString;
+        if (timeElement) timeElement.textContent = timeString;
       }
       
-      startDateInput.addEventListener('change', validateDates);
-      endDateInput.addEventListener('change', validateDates);
+      updateDateTime();
+      setInterval(updateDateTime, 1000);
+      
+      // Initialize Charts
+      const chartColors = {
+        primary: 'rgba(67, 97, 238, 0.8)',
+        success: 'rgba(16, 185, 129, 0.8)',
+        warning: 'rgba(245, 158, 11, 0.8)',
+        danger: 'rgba(239, 68, 68, 0.8)',
+        info: 'rgba(6, 182, 212, 0.8)',
+        purple: 'rgba(139, 92, 246, 0.8)'
+      };
+      
+      // Revenue Chart
+      const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+      const revenueChart = new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+          labels: <?= json_encode($months) ?>,
+          datasets: [{
+            label: 'Revenue ($)',
+            data: <?= json_encode($revenue_data) ?>,
+            borderColor: chartColors.success,
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true,
+            pointBackgroundColor: chartColors.success,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: function(context) {
+                  return 'Revenue: $' + context.parsed.y.toFixed(2);
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                drawBorder: false
+              },
+              ticks: {
+                callback: function(value) {
+                  return '$' + value;
+                }
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+      
+      // Bookings Chart
+      const bookingsCtx = document.getElementById('bookingsChart').getContext('2d');
+      const bookingsChart = new Chart(bookingsCtx, {
+        type: 'bar',
+        data: {
+          labels: <?= json_encode($months) ?>,
+          datasets: [{
+            label: 'Bookings',
+            data: <?= json_encode($bookings_data) ?>,
+            backgroundColor: chartColors.primary,
+            borderColor: chartColors.primary,
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                drawBorder: false
+              },
+              ticks: {
+                precision: 0
+              }
+            },
+            x: {
+              grid: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+      
+      // Add count-up animation to stats
+      const statValues = document.querySelectorAll('.stat-content h3');
+      statValues.forEach(stat => {
+        let text = stat.textContent;
+        let isCurrency = text.includes('$');
+        let isPercentage = text.includes('%');
+        let target = parseFloat(text.replace('$', '').replace(',', '').replace('%', ''));
+        
+        if (!isNaN(target)) {
+          let current = 0;
+          const increment = target / 30;
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+              current = target;
+              clearInterval(timer);
+            }
+            
+            if (isPercentage) {
+              stat.textContent = current.toFixed(1) + '%';
+            } else if (isCurrency) {
+              stat.textContent = '$' + current.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } else {
+              stat.textContent = Math.round(current).toLocaleString();
+            }
+          }, 40);
+        }
+      });
+      
+      // Add hover effect to stat cards
+      document.querySelectorAll('.stat-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+          this.style.transform = 'translateY(-5px)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+          this.style.transform = 'translateY(0)';
+        });
+      });
       
       // Mobile sidebar toggle
       const sidebarToggle = document.createElement('button');
@@ -1125,7 +1673,18 @@ if (isset($_SESSION['report_preview'])) {
         document.querySelector('.main-content').classList.toggle('active');
       };
       document.body.appendChild(sidebarToggle);
+      
+      // Refresh data every 60 seconds
+      setInterval(() => {
+        fetch(window.location.href)
+          .then(response => response.text())
+          .then(html => {
+            console.log('Dashboard data refreshed');
+          })
+          .catch(error => console.error('Refresh error:', error));
+      }, 60000);
     });
   </script>
 </body>
 </html>
+[file content end]

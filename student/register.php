@@ -33,8 +33,114 @@ $swimming_levels = [
 
 // Check if form is submitted
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // [PHP validation code remains the same as before...]
-    // (Keep all the PHP validation logic from previous version)
+    // Collect and sanitize input
+    $form_data['name'] = trim($_POST['name'] ?? '');
+    $form_data['email'] = filter_var($_POST['email'] ?? '', FILTER_SANITIZE_EMAIL);
+    $form_data['phone'] = trim($_POST['phone'] ?? '');
+    $form_data['dob'] = trim($_POST['dob'] ?? '');
+    $form_data['emergency_contact'] = trim($_POST['emergency_contact'] ?? '');
+    $form_data['emergency_phone'] = trim($_POST['emergency_phone'] ?? '');
+    $form_data['medical_notes'] = trim($_POST['medical_notes'] ?? '');
+    $form_data['swimming_level'] = trim($_POST['swimming_level'] ?? 'beginner');
+    $form_data['password'] = $_POST['password'] ?? '';
+    $form_data['confirm_password'] = $_POST['confirm_password'] ?? '';
+
+    // Basic validations
+    if ($form_data['name'] === '') {
+        $errors['name'] = 'Please enter your full name';
+    }
+
+    if (!filter_var($form_data['email'], FILTER_VALIDATE_EMAIL)) {
+        $errors['email'] = 'Please enter a valid email address';
+    }
+
+    if ($form_data['dob'] === '') {
+        $errors['dob'] = 'Please enter your date of birth';
+    } else {
+        // Calculate age
+        $dob_ts = strtotime($form_data['dob']);
+        if ($dob_ts === false) {
+            $errors['dob'] = 'Invalid date of birth';
+        } else {
+            $age = (int) date('Y', time() - $dob_ts) - 1970;
+            if ($age < 3) {
+                $errors['dob'] = 'Student must be at least 3 years old';
+            }
+        }
+    }
+
+    if ($form_data['emergency_contact'] === '') {
+        $errors['emergency_contact'] = 'Please provide an emergency contact name';
+    }
+    if ($form_data['emergency_phone'] === '') {
+        $errors['emergency_phone'] = 'Please provide an emergency contact phone';
+    }
+
+    // Password checks
+    if (strlen($form_data['password']) < 8) {
+        $errors['password'] = 'Password must be at least 8 characters';
+    }
+    if ($form_data['password'] !== $form_data['confirm_password']) {
+        $errors['confirm_password'] = 'Passwords do not match';
+    }
+
+    if (!isset($_POST['terms'])) {
+        $errors['general'] = 'You must agree to the terms to register';
+    }
+
+    // If no validation errors, proceed to create account
+    if (empty($errors)) {
+        // Check for existing email
+        $chk = $conn->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
+        if ($chk) {
+            $chk->bind_param('s', $form_data['email']);
+            $chk->execute();
+            $res = $chk->get_result();
+            if ($res && $res->num_rows > 0) {
+                $errors['email'] = 'An account with that email already exists';
+            }
+            $chk->close();
+        }
+    }
+
+    if (empty($errors)) {
+        // Hash password
+        $hashed = password_hash($form_data['password'], PASSWORD_DEFAULT);
+
+        // Prepare insert
+        $ins = $conn->prepare('INSERT INTO users (name, email, password, phone, age, emergency_contact, medical_notes, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, "student", "active", NOW())');
+        if ($ins) {
+            $phone = $form_data['phone'] !== '' ? $form_data['phone'] : null;
+            $age_val = isset($age) ? $age : null;
+            $emergency = $form_data['emergency_contact'];
+            $medical = $form_data['medical_notes'] !== '' ? $form_data['medical_notes'] : null;
+            $ins->bind_param('ssssiss', $form_data['name'], $form_data['email'], $hashed, $phone, $age_val, $emergency, $medical);
+            if ($ins->execute()) {
+                $new_id = $conn->insert_id;
+                $ins->close();
+
+                // Log activity (best-effort)
+                if (function_exists('logActivity')) {
+                    logActivity($conn, $new_id, 'register', 'New student account created');
+                }
+
+                // Auto-login the user
+                session_regenerate_id(true);
+                $_SESSION['user_id'] = $new_id;
+                $_SESSION['role'] = 'student';
+                $_SESSION['user_name'] = $form_data['name'];
+                $_SESSION['last_activity'] = time();
+
+                // Redirect to student dashboard
+                header('Location: index.php');
+                exit();
+            } else {
+                $errors['general'] = 'Could not create account. Please try again later.';
+            }
+        } else {
+            $errors['general'] = 'Database error. Please try again later.';
+        }
+    }
 }
 ?>
 <!DOCTYPE html>

@@ -111,10 +111,12 @@ $greeting = getTimeBasedGreeting();
                         <span>Help & Support</span>
                     </a>
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item logout-item" href="logout.php">
-                        <i class="bi bi-box-arrow-right"></i>
-                        <span>Sign out</span>
-                    </a>
+                    <form method="post" action="logout.php" style="margin:0;">
+                        <button type="submit" name="confirm_logout" value="1" class="dropdown-item logout-item" style="border:none;background:none;width:100%;text-align:left;">
+                            <i class="bi bi-box-arrow-right"></i>
+                            <span>Sign out</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

@@ -63,11 +63,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $token = bin2hex(random_bytes(32));
                                 $expiry = time() + (30 * 24 * 60 * 60);
                                 
-                                // Store token in database
-                                $token_stmt = $conn->prepare('INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)');
-                                $token_stmt->bind_param('iss', $row['id'], $token, date('Y-m-d H:i:s', $expiry));
-                                $token_stmt->execute();
-                                $token_stmt->close();
+                                    // Store token in database if table exists
+                                    $token_stmt = $conn->prepare('INSERT INTO remember_tokens (user_id, token, expires_at) VALUES (?, ?, ?)');
+                                    if ($token_stmt) {
+                                        $expires_at_str = date('Y-m-d H:i:s', $expiry);
+                                        $token_stmt->bind_param('iss', $row['id'], $token, $expires_at_str);
+                                        $token_stmt->execute();
+                                        $token_stmt->close();
+                                    }
                                 
                                 setcookie('remember_token', $token, $expiry, '/', '', true, true);
                             }
@@ -100,28 +103,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Check for remember token
 if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
     $token = $_COOKIE['remember_token'];
-    
+
     $stmt = $conn->prepare('SELECT u.id, u.name, u.role FROM users u 
                            JOIN remember_tokens rt ON u.id = rt.user_id 
                            WHERE rt.token = ? AND rt.expires_at > NOW() AND u.status = "active"');
-    $stmt->bind_param('s', $token);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($row = $result->fetch_assoc()) {
-        $_SESSION['user_id'] = $row['id'];
-        $_SESSION['role'] = $row['role'];
-        $_SESSION['user_name'] = $row['name'];
-        $_SESSION['last_activity'] = time();
-        
-        if ($row['role'] === 'admin') {
-            header('Location: ../admin/index.php');
-        } else {
-            header('Location: index.php');
+    if ($stmt) {
+        $stmt->bind_param('s', $token);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($row = $result->fetch_assoc()) {
+            $_SESSION['user_id'] = $row['id'];
+            $_SESSION['role'] = $row['role'];
+            $_SESSION['user_name'] = $row['name'];
+            $_SESSION['last_activity'] = time();
+
+            if ($row['role'] === 'admin') {
+                header('Location: ../admin/index.php');
+            } else {
+                header('Location: index.php');
+            }
+            exit();
         }
-        exit();
+        $stmt->close();
     }
-    $stmt->close();
 }
 ?>
 <!DOCTYPE html>
@@ -129,7 +134,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In | AquaFlow Swimming School</title>
+    <title>Sign In | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -694,7 +699,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
                             <i class="bi bi-droplet"></i>
                         </div>
                         <div class="logo-text">
-                            <h1>AquaFlow</h1>
+                            <h1>Elite Swimming Academy</h1>
                             <p>Swimming Excellence</p>
                         </div>
                     </div>

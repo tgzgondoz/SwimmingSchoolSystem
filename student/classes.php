@@ -1,203 +1,253 @@
 <?php
-// student/classes.php - Professional Browse and Book Classes Page (Fixed)
+// student/classes.php - Complete Class Booking System
 session_start();
-include __DIR__ . '/../inc/db.php';
-include __DIR__ . '/../inc/functions.php';
+require_once __DIR__ . '/../inc/db.php';
+require_once __DIR__ . '/../inc/functions.php';
 
-requireRole('student');
-$user = getCurrentUser($conn);
+// Authentication and role check
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'student') {
+    header('Location: ../login.php');
+    exit();
+}
+
 $student_id = $_SESSION['user_id'];
+$success_msg = '';
+$error_msg = '';
 
-// Initialize messages
-$success_message = $error_message = '';
-
-// Handle class booking
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['book_class'])) {
-    $class_id = intval($_POST['class_id']);
+// Handle class booking with robust error handling
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'book_class') {
+    $class_id = filter_input(INPUT_POST, 'class_id', FILTER_VALIDATE_INT);
     
-    // Check if already booked
-    $check_stmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND class_id = ?");
-    $check_stmt->bind_param('ii', $student_id, $class_id);
-    $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
-    
-    if ($check_result->num_rows > 0) {
-        $error_message = "You have already booked this class.";
+    if (!$class_id || $class_id <= 0) {
+        $error_msg = "Invalid class selection.";
     } else {
-        // Check if class has available slots
-        $class_stmt = $conn->prepare("SELECT slots_available, title FROM classes WHERE id = ?");
-        $class_stmt->bind_param('i', $class_id);
-        $class_stmt->execute();
-        $class_result = $class_stmt->get_result();
-        $class = $class_result->fetch_assoc();
+        // Start transaction
+        $conn->begin_transaction();
         
-        if ($class['slots_available'] <= 0) {
-            $error_message = "This class is fully booked.";
-        } else {
-            // Start transaction
-            $conn->begin_transaction();
+        try {
+            // 1. Check if class exists and has available slots (with row lock)
+            $stmt = $conn->prepare("SELECT id, title, slots_available, slots_total FROM classes WHERE id = ? AND start_time > NOW() AND status = 'scheduled' FOR UPDATE");
+            $stmt->bind_param("i", $class_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
             
-            try {
-                // Create booking
-                $stmt = $conn->prepare("INSERT INTO bookings (user_id, class_id, status, booking_date) VALUES (?, ?, 'confirmed', NOW())");
-                $stmt->bind_param('ii', $student_id, $class_id);
-                $stmt->execute();
-                
-                // Update available slots
-                $update_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available - 1 WHERE id = ?");
-                $update_stmt->bind_param('i', $class_id);
-                $update_stmt->execute();
-                
-                $conn->commit();
-                $success_message = "Successfully booked <strong>{$class['title']}</strong>! Your booking is confirmed.";
-                
-                // Refresh the page to show updated slot count
-                header("Location: classes.php?success=" . urlencode($success_message));
-                exit();
-                
-            } catch (Exception $e) {
-                $conn->rollback();
-                $error_message = "Failed to book class. Please try again.";
+            if ($result->num_rows === 0) {
+                throw new Exception("Class not found, has already started, or is not scheduled.");
             }
+            
+            $class = $result->fetch_assoc();
+            
+            // 2. Check if slots are available
+            if ($class['slots_available'] <= 0) {
+                throw new Exception("This class is fully booked.");
+            }
+            
+            // 3. Check if student already booked this class
+            $check_stmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND class_id = ? AND status != 'cancelled'");
+            $check_stmt->bind_param("ii", $student_id, $class_id);
+            $check_stmt->execute();
+            
+            if ($check_stmt->get_result()->num_rows > 0) {
+                throw new Exception("You have already booked this class.");
+            }
+            
+            // 4. Create booking record
+            $insert_stmt = $conn->prepare("INSERT INTO bookings (user_id, class_id, status, created_at) VALUES (?, ?, 'pending', NOW())");
+            $insert_stmt->bind_param("ii", $student_id, $class_id);
+            
+            if (!$insert_stmt->execute()) {
+                throw new Exception("Failed to create booking. Please try again.");
+            }
+            
+            $booking_id = $conn->insert_id;
+            
+            // 5. Update class slots
+            $update_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available - 1 WHERE id = ? AND slots_available > 0 AND status = 'scheduled'");
+            $update_stmt->bind_param("i", $class_id);
+            $update_stmt->execute();
+            
+            if ($update_stmt->affected_rows === 0) {
+                throw new Exception("No slots available to update or class is not scheduled.");
+            }
+            
+            // 6. Commit transaction
+            $conn->commit();
+            
+            // Set success message and refresh
+            $_SESSION['success_msg'] = "Successfully booked '{$class['title']}'! Your booking is pending confirmation. Booking ID: #{$booking_id}";
+            header('Location: classes.php?success=1');
+            exit();
+            
+        } catch (Exception $e) {
+            // Rollback on any error
+            $conn->rollback();
+            $error_msg = $e->getMessage();
+            
+            // Log error for debugging
+            error_log("Booking Error - Student: {$student_id}, Class: {$class_id}, Error: " . $e->getMessage());
         }
     }
 }
 
-// Display success message from URL parameter
-if (isset($_GET['success'])) {
-    $success_message = htmlspecialchars($_GET['success']);
+// Load success message from session
+if (isset($_SESSION['success_msg'])) {
+    $success_msg = $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
+} elseif (isset($_GET['success'])) {
+    $success_msg = "Booking successful! Please check your bookings.";
 }
 
 // Get filter parameters
-$age_group_filter = $_GET['age_group'] ?? '';
-$instructor_filter = $_GET['instructor'] ?? 0;
-$date_filter = $_GET['date'] ?? '';
+$filters = [
+    'age_group' => $_GET['age_group'] ?? '',
+    'instructor' => isset($_GET['instructor']) ? (int)$_GET['instructor'] : 0,
+    'date' => $_GET['date'] ?? ''
+];
 
-// Build query with filters
-$where_conditions = ["c.start_time >= NOW()", "c.slots_available > 0"];
+// Build WHERE clause for filtering
+$where_conditions = ["c.slots_available > 0", "c.start_time > NOW()", "c.status = 'scheduled'"];
 $params = [];
-$types = '';
+$param_types = '';
 
-if ($age_group_filter) {
+// Add age group filter
+if (!empty($filters['age_group'])) {
     $where_conditions[] = "c.age_group = ?";
-    $params[] = $age_group_filter;
-    $types .= 's';
+    $params[] = $filters['age_group'];
+    $param_types .= 's';
 }
 
-if ($instructor_filter) {
+// Add instructor filter
+if ($filters['instructor'] > 0) {
     $where_conditions[] = "c.instructor_id = ?";
-    $params[] = $instructor_filter;
-    $types .= 'i';
+    $params[] = $filters['instructor'];
+    $param_types .= 'i';
 }
 
-if ($date_filter) {
+// Add date filter
+if (!empty($filters['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['date'])) {
     $where_conditions[] = "DATE(c.start_time) = ?";
-    $params[] = $date_filter;
-    $types .= 's';
+    $params[] = $filters['date'];
+    $param_types .= 's';
 }
 
-// Add the student_id parameter for checking bookings
+// Prepare query to get available classes with booking status
+$query = "SELECT 
+            c.*, 
+            i.name as instructor_name,
+            i.specialization,
+            (SELECT COUNT(*) FROM bookings b WHERE b.class_id = c.id AND b.user_id = ? AND b.status != 'cancelled') as already_booked
+          FROM classes c
+          LEFT JOIN instructors i ON c.instructor_id = i.id
+          WHERE " . implode(" AND ", $where_conditions) . "
+          ORDER BY c.start_time ASC";
+
+// Add student_id as first parameter for the subquery
 array_unshift($params, $student_id);
-$types = 'i' . $types;
+$param_types = 'i' . $param_types;
 
-$query = "
-    SELECT c.*, i.name as instructor_name,
-           (SELECT COUNT(*) FROM bookings WHERE class_id = c.id AND user_id = ?) as is_booked
-    FROM classes c
-    LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE " . implode(' AND ', $where_conditions) . "
-    ORDER BY c.start_time ASC
-";
-
+$classes = [];
 $stmt = $conn->prepare($query);
-$stmt->bind_param($types, ...$params);
-$stmt->execute();
-$classes = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Get unique values for filters
-$age_groups = $conn->query("SELECT DISTINCT age_group FROM classes WHERE start_time >= NOW() ORDER BY age_group")->fetch_all(MYSQLI_ASSOC);
-$instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+if ($stmt) {
+    if (!empty($params)) {
+        $stmt->bind_param($param_types, ...$params);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $classes = $result->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+} else {
+    // Log the error for debugging
+    error_log("Database query error: " . $conn->error);
+    $error_msg = "Unable to load classes. Please try again later.";
+}
+
+// Get filter options
+$age_groups = $conn->query("SELECT DISTINCT age_group FROM classes WHERE slots_available > 0 AND start_time > NOW() AND status = 'scheduled' ORDER BY age_group")->fetch_all(MYSQLI_ASSOC);
+$instructors = $conn->query("SELECT id, name FROM instructors WHERE status = 'active' ORDER BY name")->fetch_all(MYSQLI_ASSOC);
+
+// Get user info
+$user = [];
+$user_stmt = $conn->prepare("SELECT name, email, phone, age, emergency_contact FROM users WHERE id = ?");
+if ($user_stmt) {
+    $user_stmt->bind_param("i", $student_id);
+    $user_stmt->execute();
+    $user_result = $user_stmt->get_result();
+    $user = $user_result->fetch_assoc() ?: [];
+    $user_stmt->close();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browse Classes | AquaFlow Student Portal</title>
+    <title>Book Classes | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #0d6efd;
             --primary-dark: #0a58ca;
-            --primary-light: #dbeafe;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #06b6d4;
+            --success: #198754;
+            --warning: #ffc107;
+            --danger: #dc3545;
             --light: #f8f9fa;
             --dark: #212529;
-            --gray-50: #f9fafb;
-            --gray-100: #f3f4f6;
-            --gray-200: #e5e7eb;
-            --gray-300: #d1d5db;
-            --gray-400: #9ca3af;
-            --gray-500: #6b7280;
-            --gray-600: #4b5563;
-            --gray-700: #374151;
-            --gray-800: #1f2937;
-            --gray-900: #111827;
+            --aqua: #0dcaf0;
+            --blue-light: #e7f1ff;
         }
-
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #f0f9ff 0%, #e6f0ff 100%);
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
             min-height: 100vh;
-            color: var(--gray-800);
-            line-height: 1.6;
+            color: #333;
         }
-
+        
         .dashboard-container {
             display: flex;
             min-height: 100vh;
         }
-
-        /* Sidebar Styling */
+        
+        /* Sidebar */
         .sidebar {
             width: 260px;
             background: white;
-            border-right: 1px solid var(--gray-200);
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
             position: fixed;
             top: 0;
             left: 0;
             bottom: 0;
             z-index: 1000;
-            transition: all 0.3s ease;
+            padding: 20px 0;
         }
-
+        
         .logo-area {
-            padding: 25px 20px;
-            border-bottom: 1px solid var(--gray-200);
+            padding: 0 25px 25px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 20px;
         }
-
+        
         .logo {
             display: flex;
             align-items: center;
             gap: 12px;
             text-decoration: none;
+            color: var(--dark);
         }
-
+        
         .logo-icon {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
             border-radius: 10px;
             display: flex;
             align-items: center;
@@ -205,124 +255,112 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
             color: white;
             font-size: 20px;
         }
-
+        
         .logo-text h3 {
-            font-family: 'Poppins', sans-serif;
             font-weight: 700;
-            font-size: 20px;
+            font-size: 22px;
             margin: 0;
-            color: var(--gray-900);
+            background: linear-gradient(90deg, var(--primary), var(--aqua));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
-
+        
         .logo-text span {
             font-size: 12px;
-            color: var(--gray-500);
-            font-weight: 500;
+            color: #6c757d;
         }
-
+        
         .nav-menu {
-            padding: 20px 15px;
+            padding: 0 15px;
         }
-
+        
         .nav-item {
             margin-bottom: 5px;
         }
-
+        
         .nav-link {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 12px 15px;
             border-radius: 10px;
-            color: var(--gray-600);
+            color: #495057;
             text-decoration: none;
             font-weight: 500;
             transition: all 0.3s ease;
         }
-
+        
         .nav-link:hover {
-            background: var(--gray-100);
+            background: var(--blue-light);
             color: var(--primary);
             transform: translateX(5px);
         }
-
+        
         .nav-link.active {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: white;
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
         }
-
-        .nav-link.active i {
-            color: white;
-        }
-
+        
         .nav-link i {
             width: 20px;
             text-align: center;
             font-size: 18px;
-            color: var(--gray-500);
         }
-
-        .nav-link.active:hover {
-            transform: translateX(5px);
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #0a3d9c 100%);
-        }
-
+        
         .logout-section {
             padding: 20px;
-            border-top: 1px solid var(--gray-200);
-            margin-top: auto;
             position: absolute;
             bottom: 0;
             width: 100%;
+            border-top: 1px solid #eee;
         }
-
-        /* Main Content Styling */
+        
+        /* Main Content */
         .main-content {
             flex: 1;
             margin-left: 260px;
             padding: 30px;
-            transition: all 0.3s ease;
         }
-
-        /* Header Styling */
+        
+        /* Header */
         .header {
             background: white;
             border-radius: 15px;
-            padding: 20px 30px;
+            padding: 25px 30px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
+        
         .header-left h1 {
-            font-family: 'Poppins', sans-serif;
             font-size: 32px;
             font-weight: 700;
-            margin-bottom: 8px;
-            color: var(--gray-900);
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            margin-bottom: 5px;
+            background: linear-gradient(90deg, var(--primary), var(--aqua));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-
+        
         .header-left p {
-            color: var(--gray-600);
+            color: #6c757d;
             margin: 0;
-            font-size: 16px;
         }
-
+        
         .user-profile {
             display: flex;
             align-items: center;
             gap: 15px;
+            background: var(--light);
+            padding: 12px 20px;
+            border-radius: 10px;
         }
-
+        
         .user-avatar {
-            width: 50px;
-            height: 50px;
+            width: 45px;
+            height: 45px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 50%;
             display: flex;
@@ -331,31 +369,29 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
             color: white;
             font-weight: 600;
             font-size: 18px;
-            border: 3px solid white;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-
+        
         .user-info h5 {
             font-weight: 600;
             margin: 0;
-            color: var(--gray-900);
         }
-
+        
         .user-info p {
-            color: var(--gray-500);
-            font-size: 13px;
+            color: #6c757d;
+            font-size: 14px;
             margin: 0;
         }
-
-        /* Alert Messages */
+        
+        /* Alerts */
         .alert-custom {
             border-radius: 12px;
             border: none;
             padding: 20px 25px;
             margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
             animation: slideIn 0.5s ease;
         }
-
+        
         @keyframes slideIn {
             from {
                 opacity: 0;
@@ -366,41 +402,27 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                 transform: translateY(0);
             }
         }
-
-        .alert-custom i {
-            font-size: 22px;
-            margin-right: 12px;
-        }
-
+        
         /* Filter Panel */
         .filter-panel {
             background: white;
             border-radius: 15px;
             padding: 25px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--gray-200);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
         }
-
+        
         .filter-header {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 15px;
+            margin-bottom: 25px;
         }
-
-        .filter-header h3 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 20px;
-            font-weight: 600;
-            margin: 0;
-            color: var(--gray-900);
-        }
-
+        
         .filter-icon {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
             border-radius: 12px;
             display: flex;
             align-items: center;
@@ -408,72 +430,69 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
             color: white;
             font-size: 22px;
         }
-
-        .filter-form .row {
-            align-items: flex-end;
+        
+        .filter-header h3 {
+            font-size: 22px;
+            font-weight: 600;
+            margin: 0;
         }
-
-        .form-label {
-            font-weight: 500;
-            color: var(--gray-700);
+        
+        .filter-form .form-label {
+            font-weight: 600;
+            color: #495057;
             margin-bottom: 8px;
-            font-size: 14px;
         }
-
-        .form-control, .form-select {
-            padding: 12px 16px;
-            border: 2px solid var(--gray-200);
+        
+        .filter-form .form-control,
+        .filter-form .form-select {
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
             border-radius: 10px;
-            font-size: 15px;
-            transition: all 0.3s ease;
-            background: var(--gray-50);
+            transition: all 0.3s;
         }
-
-        .form-control:focus, .form-select:focus {
+        
+        .filter-form .form-control:focus,
+        .filter-form .form-select:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
-            background: white;
         }
-
+        
         .filter-actions {
             display: flex;
-            gap: 12px;
-            margin-top: 10px;
+            gap: 10px;
+            margin-top: 20px;
         }
-
-        .btn-primary {
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
-            color: white;
+        
+        .btn-primary-custom {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             border: none;
             border-radius: 10px;
-            padding: 12px 24px;
+            padding: 12px 25px;
             font-weight: 600;
-            font-size: 15px;
-            transition: all 0.3s ease;
+            transition: all 0.3s;
         }
-
-        .btn-primary:hover {
+        
+        .btn-primary-custom:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 25px rgba(13, 110, 253, 0.3);
         }
-
-        .btn-outline {
+        
+        .btn-outline-custom {
             background: white;
             color: var(--primary);
             border: 2px solid var(--primary);
             border-radius: 10px;
-            padding: 12px 24px;
+            padding: 12px 25px;
             font-weight: 600;
-            font-size: 15px;
-            transition: all 0.3s ease;
+            transition: all 0.3s;
         }
-
-        .btn-outline:hover {
+        
+        .btn-outline-custom:hover {
             background: var(--primary);
             color: white;
             transform: translateY(-2px);
         }
-
+        
         /* Classes Grid */
         .classes-header {
             display: flex;
@@ -481,270 +500,263 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
             align-items: center;
             margin-bottom: 25px;
         }
-
+        
         .classes-header h2 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 600;
-            color: var(--gray-900);
             margin: 0;
         }
-
+        
         .classes-count {
-            background: var(--primary-light);
+            background: var(--blue-light);
             color: var(--primary);
-            padding: 8px 16px;
+            padding: 8px 20px;
             border-radius: 20px;
             font-weight: 600;
-            font-size: 14px;
         }
-
+        
         .classes-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
             gap: 25px;
-            margin-bottom: 40px;
         }
-
-        @media (max-width: 992px) {
-            .classes-grid {
-                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            }
-        }
-
-        @media (max-width: 768px) {
-            .classes-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
+        
         /* Class Card */
         .class-card {
             background: white;
             border-radius: 15px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
             transition: all 0.3s ease;
-            border: 1px solid var(--gray-200);
-            position: relative;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
+            border: 1px solid #e9ecef;
         }
-
+        
         .class-card:hover {
             transform: translateY(-10px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
         }
-
+        
+        .class-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
+            padding: 20px;
+            color: white;
+            position: relative;
+        }
+        
         .class-badge {
             position: absolute;
             top: 20px;
             right: 20px;
-            z-index: 2;
-            padding: 8px 16px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 6px 15px;
             border-radius: 20px;
             font-size: 12px;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
-
-        .badge-age {
-            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-            color: white;
-        }
-
-        .class-image {
-            height: 180px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .class-image::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(45deg, rgba(0,0,0,0.2), rgba(0,0,0,0.1));
-        }
-
-        .slots-indicator {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            padding: 8px 16px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--gray-800);
-        }
-
-        .slots-indicator i {
-            color: var(--primary);
-        }
-
-        .class-content {
-            padding: 25px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
+        
         .class-title {
-            font-family: 'Poppins', sans-serif;
             font-size: 20px;
             font-weight: 600;
-            color: var(--gray-900);
-            margin-bottom: 12px;
-            line-height: 1.4;
+            margin-bottom: 5px;
         }
-
+        
         .class-instructor {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-top: 15px;
         }
-
+        
         .instructor-avatar {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            width: 40px;
+            height: 40px;
+            background: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: var(--primary);
             font-weight: 600;
+        }
+        
+        .instructor-info h6 {
+            margin: 0;
             font-size: 14px;
+            color: rgba(255,255,255,0.9);
         }
-
-        .instructor-info h5 {
-            font-size: 15px;
-            font-weight: 600;
-            margin: 0;
-            color: var(--gray-900);
-        }
-
+        
         .instructor-info p {
-            font-size: 13px;
-            color: var(--gray-500);
             margin: 0;
+            font-size: 12px;
+            color: rgba(255,255,255,0.7);
         }
-
+        
+        .class-content {
+            padding: 25px;
+        }
+        
         .class-details {
             margin-bottom: 20px;
-            flex: 1;
         }
-
+        
         .detail-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 12px;
+            margin-bottom: 12px;
             font-size: 14px;
-            color: var(--gray-600);
         }
-
+        
         .detail-item i {
             color: var(--primary);
             width: 20px;
             text-align: center;
         }
-
-        .class-price {
+        
+        .class-footer {
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
             padding-top: 20px;
-            border-top: 1px solid var(--gray-200);
-            margin-top: auto;
+            border-top: 1px solid #e9ecef;
         }
-
-        .price-tag {
+        
+        .class-price {
             font-size: 24px;
             font-weight: 700;
             color: var(--primary);
         }
-
-        .price-tag span {
+        
+        .class-price small {
             font-size: 14px;
-            color: var(--gray-500);
+            color: #6c757d;
             font-weight: 500;
         }
-
+        
+        .slots-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 15px;
+            padding: 8px 15px;
+            background: var(--light);
+            border-radius: 8px;
+        }
+        
         .btn-book {
-            background: linear-gradient(90deg, var(--success), #059669);
+            background: linear-gradient(135deg, var(--success) 0%, #157347 100%);
             color: white;
             border: none;
             border-radius: 10px;
-            padding: 10px 20px;
+            padding: 12px 25px;
             font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s ease;
+            transition: all 0.3s;
             display: flex;
             align-items: center;
             gap: 8px;
         }
-
-        .btn-book:hover {
+        
+        .btn-book:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
+            box-shadow: 0 8px 20px rgba(25, 135, 84, 0.3);
         }
-
+        
         .btn-book:disabled {
-            background: var(--gray-400);
+            background: #6c757d;
             cursor: not-allowed;
-            transform: none !important;
-            box-shadow: none !important;
         }
-
+        
         .btn-booked {
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
         }
-
+        
+        .btn-pending {
+            background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%);
+        }
+        
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 80px 20px;
+            padding: 60px 20px;
             background: white;
             border-radius: 15px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--gray-200);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
         }
-
-        .empty-state i {
-            font-size: 72px;
-            color: var(--gray-300);
+        
+        .empty-state-icon {
+            font-size: 80px;
+            color: #dee2e6;
             margin-bottom: 20px;
         }
-
+        
         .empty-state h3 {
-            font-family: 'Poppins', sans-serif;
             font-size: 24px;
             font-weight: 600;
-            color: var(--gray-700);
-            margin-bottom: 12px;
+            margin-bottom: 10px;
+            color: #495057;
         }
-
+        
         .empty-state p {
-            color: var(--gray-500);
-            margin-bottom: 25px;
+            color: #6c757d;
             max-width: 400px;
-            margin-left: auto;
-            margin-right: auto;
+            margin: 0 auto 25px;
         }
-
-        /* Responsive Design */
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-spinner {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9998;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .classes-grid {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+        }
+        
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -761,15 +773,11 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
             .logo {
                 justify-content: center;
             }
-            
-            .main-content {
-                padding: 20px;
-            }
         }
-
+        
         @media (max-width: 768px) {
             .main-content {
-                padding: 15px;
+                padding: 20px;
             }
             
             .header {
@@ -778,41 +786,25 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                 text-align: center;
             }
             
-            .header-left h1 {
-                font-size: 24px;
+            .classes-grid {
+                grid-template-columns: 1fr;
             }
             
             .filter-form .row > div {
                 margin-bottom: 15px;
             }
-            
-            .filter-actions {
-                flex-direction: column;
-            }
-            
-            .btn-primary, .btn-outline {
-                width: 100%;
-            }
-        }
-
-        /* Animations */
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
         }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p class="mt-3">Processing your booking...</p>
+        </div>
+    </div>
+    
     <div class="dashboard-container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -822,12 +814,12 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                         <i class="bi bi-droplet"></i>
                     </div>
                     <div class="logo-text">
-                        <h3>AquaFlow</h3>
+                        <h3>Elite Swimming Academy</h3>
                         <span>Student Portal</span>
                     </div>
                 </a>
             </div>
-
+            
             <nav class="nav-menu">
                 <div class="nav-item">
                     <a href="index.php" class="nav-link">
@@ -837,8 +829,8 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                 </div>
                 <div class="nav-item">
                     <a href="classes.php" class="nav-link active">
-                        <i class="bi bi-calendar-week"></i>
-                        <span class="nav-text">Classes</span>
+                        <i class="bi bi-calendar-check"></i>
+                        <span class="nav-text">Book Classes</span>
                     </a>
                 </div>
                 <div class="nav-item">
@@ -860,53 +852,55 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                     </a>
                 </div>
             </nav>
-
+            
             <div class="logout-section">
-                <a href="logout.php" class="nav-link">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span class="nav-text">Logout</span>
-                </a>
+                <form method="post" action="logout.php" style="margin:0;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="nav-text">Logout</span>
+                    </button>
+                </form>
             </div>
         </aside>
-
+        
         <!-- Main Content -->
         <main class="main-content">
             <!-- Header -->
-            <header class="header fade-in">
+            <header class="header">
                 <div class="header-left">
-                    <h1>Browse Swimming Classes</h1>
-                    <p>Discover and book classes that match your skill level and schedule</p>
+                    <h1>Book Swimming Classes</h1>
+                    <p>Discover and book available swimming classes</p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
-                        <?= strtoupper(substr($user['name'], 0, 1)) ?>
+                        <?= isset($user['name']) ? strtoupper(substr($user['name'], 0, 1)) : 'U' ?>
                     </div>
                     <div class="user-info">
-                        <h5><?= htmlspecialchars($user['name']) ?></h5>
-                        <p>Student ID: <?= htmlspecialchars($user['student_id'] ?? 'N/A') ?></p>
+                        <h5><?= htmlspecialchars($user['name'] ?? 'User') ?></h5>
+                        <p>Student ID: <?= htmlspecialchars($student_id) ?></p>
                     </div>
                 </div>
             </header>
-
-            <!-- Alert Messages -->
-            <?php if($success_message): ?>
+            
+            <!-- Alerts -->
+            <?php if ($success_msg): ?>
                 <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
-                    <i class="bi bi-check-circle"></i>
-                    <?= $success_message ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    <?= htmlspecialchars($success_msg) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
             
-            <?php if($error_message): ?>
+            <?php if ($error_msg): ?>
                 <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
-                    <i class="bi bi-exclamation-circle"></i>
-                    <?= $error_message ?>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <i class="bi bi-exclamation-circle-fill me-2"></i>
+                    <?= htmlspecialchars($error_msg) ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
-
+            
             <!-- Filter Panel -->
-            <div class="filter-panel fade-in">
+            <div class="filter-panel">
                 <div class="filter-header">
                     <div class="filter-icon">
                         <i class="bi bi-funnel"></i>
@@ -920,9 +914,9 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                             <label class="form-label">Age Group</label>
                             <select class="form-select" name="age_group">
                                 <option value="">All Age Groups</option>
-                                <?php foreach($age_groups as $group): ?>
-                                    <option value="<?= htmlspecialchars($group['age_group']) ?>" 
-                                        <?= $age_group_filter == $group['age_group'] ? 'selected' : '' ?>>
+                                <?php foreach ($age_groups as $group): ?>
+                                    <option value="<?= htmlspecialchars($group['age_group']) ?>"
+                                        <?= $filters['age_group'] === $group['age_group'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($group['age_group']) ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -933,9 +927,9 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                             <label class="form-label">Instructor</label>
                             <select class="form-select" name="instructor">
                                 <option value="">All Instructors</option>
-                                <?php foreach($instructors as $instructor): ?>
-                                    <option value="<?= $instructor['id'] ?>" 
-                                        <?= $instructor_filter == $instructor['id'] ? 'selected' : '' ?>>
+                                <?php foreach ($instructors as $instructor): ?>
+                                    <option value="<?= $instructor['id'] ?>"
+                                        <?= $filters['instructor'] === $instructor['id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($instructor['name']) ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -945,128 +939,131 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
                         <div class="col-md-4">
                             <label class="form-label">Date</label>
                             <input type="date" class="form-control" name="date" 
-                                   value="<?= htmlspecialchars($date_filter) ?>"
+                                   value="<?= htmlspecialchars($filters['date']) ?>"
                                    min="<?= date('Y-m-d') ?>">
                         </div>
                     </div>
                     
-                    <div class="filter-actions mt-4">
-                        <button type="submit" class="btn-primary">
-                            <i class="bi bi-search me-2"></i>Apply Filters
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary-custom">
+                            <i class="bi bi-funnel me-2"></i>Apply Filters
                         </button>
-                        <a href="classes.php" class="btn-outline">
+                        <a href="classes.php" class="btn btn-outline-custom">
                             <i class="bi bi-arrow-clockwise me-2"></i>Clear Filters
                         </a>
                     </div>
                 </form>
             </div>
-
+            
             <!-- Classes Section -->
-            <div class="fade-in">
+            <div>
                 <div class="classes-header">
                     <h2>Available Classes</h2>
                     <div class="classes-count">
-                        <?= count($classes) ?> class<?= count($classes) != 1 ? 'es' : '' ?> found
+                        <?= count($classes) ?> class<?= count($classes) !== 1 ? 'es' : '' ?> found
                     </div>
                 </div>
-
-                <?php if(empty($classes)): ?>
+                
+                <?php if (empty($classes)): ?>
                     <div class="empty-state">
-                        <i class="bi bi-calendar-x"></i>
-                        <h3>No Classes Found</h3>
-                        <p>No swimming classes match your current filters. Try adjusting your search criteria or check back later for new classes.</p>
-                        <a href="classes.php" class="btn-primary">
-                            <i class="bi bi-arrow-clockwise me-2"></i>Clear All Filters
+                        <div class="empty-state-icon">
+                            <i class="bi bi-calendar-x"></i>
+                        </div>
+                        <h3>No Classes Available</h3>
+                        <p>There are no classes matching your filters at the moment. Please try different filters or check back later.</p>
+                        <a href="classes.php" class="btn btn-primary-custom">
+                            <i class="bi bi-arrow-clockwise me-2"></i>View All Classes
                         </a>
                     </div>
                 <?php else: ?>
                     <div class="classes-grid">
-                        <?php foreach($classes as $class): 
-                            // Determine slot availability color
-                            $max_capacity = $class['max_capacity'] ?? 10;
-                            $slot_percentage = ($class['slots_available'] / $max_capacity) * 100;
-                            
-                            // Check if already booked
-                            $is_booked = $class['is_booked'] > 0;
-                            
-                            // Format date and time
+                        <?php foreach ($classes as $class): 
                             $start_time = strtotime($class['start_time']);
                             $end_time = strtotime($class['end_time']);
-                            $duration_minutes = ($end_time - $start_time) / 60;
+                            $duration = ($end_time - $start_time) / 60;
+                            $already_booked = $class['already_booked'] > 0;
+                            $slots_percentage = ($class['slots_available'] / $class['slots_total']) * 100;
+                            
+                            // Check if the end_time is valid (not 0000-00-00 00:00:00)
+                            $has_end_time = !empty($class['end_time']) && $class['end_time'] != '0000-00-00 00:00:00';
                         ?>
                             <div class="class-card">
-                                <!-- Badges -->
-                                <div class="class-badge badge-age">
-                                    <?= htmlspecialchars($class['age_group']) ?>
-                                </div>
-                                
-                                <!-- Class Image -->
-                                <div class="class-image">
-                                    <div class="slots-indicator">
-                                        <i class="bi bi-people-fill"></i>
-                                        <span><?= $class['slots_available'] ?> of <?= $max_capacity ?> slots available</span>
+                                <div class="class-header">
+                                    <div class="class-badge">
+                                        <?= htmlspecialchars($class['age_group']) ?>
                                     </div>
-                                </div>
-                                
-                                <!-- Class Content -->
-                                <div class="class-content">
-                                    <!-- Title -->
                                     <h3 class="class-title"><?= htmlspecialchars($class['title']) ?></h3>
-                                    
-                                    <!-- Instructor -->
                                     <div class="class-instructor">
                                         <div class="instructor-avatar">
                                             <?= strtoupper(substr($class['instructor_name'] ?? 'I', 0, 1)) ?>
                                         </div>
                                         <div class="instructor-info">
-                                            <h5><?= htmlspecialchars($class['instructor_name'] ?? 'TBA') ?></h5>
-                                            <p>Certified Swimming Instructor</p>
+                                            <h6><?= htmlspecialchars($class['instructor_name'] ?? 'TBA') ?></h6>
+                                            <?php if (!empty($class['specialization'])): ?>
+                                                <p><?= htmlspecialchars($class['specialization']) ?></p>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
+                                </div>
+                                
+                                <div class="class-content">
+                                    <div class="slots-info">
+                                        <i class="bi bi-people"></i>
+                                        <span><?= $class['slots_available'] ?> of <?= $class['slots_total'] ?> slots available</span>
+                                        <?php if ($slots_percentage < 30): ?>
+                                            <span class="badge bg-danger ms-2">Filling Fast</span>
+                                        <?php endif; ?>
+                                    </div>
                                     
-                                    <!-- Details -->
                                     <div class="class-details">
                                         <div class="detail-item">
-                                            <i class="bi bi-calendar"></i>
+                                            <i class="bi bi-calendar-date"></i>
                                             <span><?= date('F j, Y', $start_time) ?></span>
                                         </div>
                                         <div class="detail-item">
                                             <i class="bi bi-clock"></i>
-                                            <span><?= date('g:i A', $start_time) ?> - <?= date('g:i A', $end_time) ?></span>
+                                            <span>
+                                                <?= date('g:i A', $start_time) ?>
+                                                <?php if ($has_end_time): ?>
+                                                     - <?= date('g:i A', $end_time) ?>
+                                                <?php endif; ?>
+                                            </span>
                                         </div>
-                                        <div class="detail-item">
-                                            <i class="bi bi-hourglass"></i>
-                                            <span><?= $duration_minutes ?> minutes</span>
-                                        </div>
-                                        <?php if(!empty($class['description'])): ?>
-                                            <p class="mt-2 text-muted" style="font-size: 14px;">
-                                                <?= htmlspecialchars(substr($class['description'], 0, 100)) ?>
-                                                <?= strlen($class['description']) > 100 ? '...' : '' ?>
+                                        <?php if ($has_end_time): ?>
+                                            <div class="detail-item">
+                                                <i class="bi bi-hourglass"></i>
+                                                <span><?= $duration ?> minutes</span>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($class['description'])): ?>
+                                            <p class="mt-3 text-muted" style="font-size: 14px;">
+                                                <?= htmlspecialchars(substr($class['description'], 0, 120)) ?>
+                                                <?= strlen($class['description']) > 120 ? '...' : '' ?>
                                             </p>
                                         <?php endif; ?>
                                     </div>
                                     
-                                    <!-- Price and Book Button -->
-                                    <div class="class-price">
-                                        <div class="price-tag">
-                                            $<?= number_format($class['price'] ?? 0, 2) ?>
-                                            <span>per class</span>
+                                    <div class="class-footer">
+                                        <div class="class-price">
+                                            $<?= number_format($class['price'], 2) ?>
+                                            <small>/session</small>
                                         </div>
                                         
-                                        <?php if($is_booked): ?>
+                                        <?php if ($already_booked): ?>
                                             <button class="btn-book btn-booked" disabled>
                                                 <i class="bi bi-check-circle"></i>
                                                 Already Booked
                                             </button>
-                                        <?php elseif($class['slots_available'] <= 0): ?>
+                                        <?php elseif ($class['slots_available'] <= 0): ?>
                                             <button class="btn-book" disabled>
                                                 <i class="bi bi-x-circle"></i>
                                                 Fully Booked
                                             </button>
                                         <?php else: ?>
-                                            <form method="POST" style="margin: 0;">
+                                            <form method="POST" class="booking-form" onsubmit="return confirmBooking(this)">
+                                                <input type="hidden" name="action" value="book_class">
                                                 <input type="hidden" name="class_id" value="<?= $class['id'] ?>">
-                                                <button type="submit" name="book_class" class="btn-book">
+                                                <button type="submit" class="btn-book">
                                                     <i class="bi bi-calendar-plus"></i>
                                                     Book Now
                                                 </button>
@@ -1081,87 +1078,88 @@ $instructors = $conn->query("SELECT id, name FROM instructors ORDER BY name")->f
             </div>
         </main>
     </div>
-
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Set min date for date filter
-            const today = new Date().toISOString().split('T')[0];
-            document.querySelector('input[name="date"]').min = today;
+        // Show loading overlay
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+        
+        // Hide loading overlay
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+        
+        // Confirm booking
+        function confirmBooking(form) {
+            const classTitle = form.closest('.class-card').querySelector('.class-title').textContent;
             
-            // Add animation to class cards
+            if (!confirm(`Are you sure you want to book "${classTitle}"?\n\nThis will reserve one slot for you.`)) {
+                return false;
+            }
+            
+            showLoading();
+            
+            // Submit form via AJAX
+            fetch('', {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+                hideLoading();
+                
+                // Check if response contains success
+                if (html.includes('alert-success') || html.includes('Successfully booked')) {
+                    // Reload page to show updated status
+                    window.location.reload();
+                } else {
+                    // Parse HTML to extract error message
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const errorAlert = doc.querySelector('.alert-danger');
+                    
+                    if (errorAlert) {
+                        alert('Booking failed: ' + errorAlert.textContent.trim());
+                    } else {
+                        alert('Booking failed. Please try again.');
+                    }
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Network error. Please check your connection and try again.');
+            });
+            
+            return false; // Prevent default form submission
+        }
+        
+        // Update min date for date filter
+        document.addEventListener('DOMContentLoaded', function() {
+            const dateInput = document.querySelector('input[name="date"]');
+            if (dateInput) {
+                dateInput.min = new Date().toISOString().split('T')[0];
+            }
+            
+            // Add fade-in animation to cards
             const cards = document.querySelectorAll('.class-card');
             cards.forEach((card, index) => {
                 card.style.animationDelay = `${index * 0.1}s`;
-                card.classList.add('fade-in');
+                card.classList.add('animate__animated', 'animate__fadeIn');
             });
-            
-            // Confirmation for booking
-            const bookingForms = document.querySelectorAll('form[method="POST"]');
-            bookingForms.forEach(form => {
-                form.addEventListener('submit', function(e) {
-                    const button = this.querySelector('button[type="submit"]');
-                    const classTitle = this.closest('.class-card').querySelector('.class-title').textContent;
-                    
-                    if (!confirm(`Are you sure you want to book "${classTitle}"?`)) {
-                        e.preventDefault();
-                        return;
-                    }
-                    
-                    // Show loading state
-                    const originalText = button.innerHTML;
-                    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Booking...';
-                    button.disabled = true;
-                    
-                    // Revert after 3 seconds if form doesn't submit
-                    setTimeout(() => {
-                        if (!button.disabled) {
-                            button.innerHTML = originalText;
-                        }
-                    }, 3000);
-                });
-            });
-            
-            // Add hover effect to filter panel
-            const filterPanel = document.querySelector('.filter-panel');
-            filterPanel.addEventListener('mouseenter', function() {
-                this.style.transform = 'translateY(-5px)';
-            });
-            
-            filterPanel.addEventListener('mouseleave', function() {
-                this.style.transform = 'translateY(0)';
-            });
-            
-            // Update classes count with animation
-            const classesCount = document.querySelector('.classes-count');
-            if (classesCount) {
-                let count = parseInt(classesCount.textContent);
-                classesCount.textContent = '0 classes found';
-                
-                let current = 0;
-                const increment = Math.ceil(count / 20);
-                
-                const timer = setInterval(() => {
-                    current += increment;
-                    if (current >= count) {
-                        current = count;
-                        clearInterval(timer);
-                    }
-                    classesCount.textContent = current + ' class' + (current !== 1 ? 'es' : '') + ' found';
-                }, 50);
-            }
-            
-            // Show more details on card click (mobile)
-            if (window.innerWidth < 768) {
-                document.querySelectorAll('.class-card').forEach(card => {
-                    card.style.cursor = 'pointer';
-                    card.addEventListener('click', function(e) {
-                        if (!e.target.closest('.btn-book') && !e.target.closest('form')) {
-                            this.classList.toggle('expanded');
-                        }
-                    });
-                });
-            }
+        });
+        
+        // Auto-hide alerts after 5 seconds
+        document.querySelectorAll('.alert').forEach(alert => {
+            setTimeout(() => {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, 5000);
         });
     </script>
 </body>

@@ -1,4 +1,4 @@
-<?php
+ <?php
 // index.php - Professional Public Landing Page (Fixed)
 session_start();
 include __DIR__ . '/inc/db.php';
@@ -58,7 +58,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($school_name) ?> | Premier Swimming School in Zimbabwe</title>
+    <title><?= htmlspecialchars($school_name) ?> | Waterfalls</title>
     <meta name="description" content="<?= htmlspecialchars($school_description) ?>">
     <meta name="keywords" content="swimming school, learn to swim, swimming lessons, Zimbabwe, professional instructors, swimming classes">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -117,65 +117,301 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             background-clip: text;
         }
 
-        /* Navigation */
-        .navbar {
-            padding: 1rem 0;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            transition: all 0.3s ease;
-        }
+      /* Navigation */
+.navbar {
+    padding: 1rem 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1030;
+    transition: all 0.3s ease;
+}
 
-        .navbar.scrolled {
-            padding: 0.75rem 0;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
+.navbar.scrolled {
+    padding: 0.75rem 0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
 
-        .navbar-brand {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 800;
-            font-size: 1.75rem;
-            color: var(--primary) !important;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+.navbar-brand {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 800;
+    font-size: 1.5rem; /* Reduced from 1.75rem */
+    color: var(--primary) !important;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* Reduced from 0.75rem */
+    text-decoration: none;
+    max-width: 50%; /* Limit brand width */
+    flex-shrink: 1; /* Allow shrinking */
+    overflow: hidden;
+}
 
-        .brand-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.25rem;
-        }
+.brand-icon {
+    width: 40px; /* Reduced from 44px */
+    height: 40px; /* Reduced from 44px */
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    border-radius: 10px; /* Reduced from 12px */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.25rem; /* Reduced from 1.5rem */
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+    flex-shrink: 0; /* Don't shrink icon */
+}
 
-        .nav-link {
-            font-weight: 500;
-            color: var(--gray-700) !important;
-            padding: 0.5rem 1rem !important;
-            margin: 0 0.25rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }
+.navbar-brand span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /*max-width: calc(100% - 60px); /* Limit text width */
+}
 
-        .nav-link:hover {
-            color: var(--primary) !important;
-            background: var(--gray-100);
-        }
+.navbar-nav {
+    align-items: center;
+    gap: 0.25rem; /* Reduced gap */
+    flex-wrap: nowrap;
+    min-width: 0; /* Allow shrinking */
+}
 
-        .nav-link.active {
-            color: var(--primary) !important;
-            background: var(--primary-light);
-        }
+.nav-link {
+    font-weight: 600;
+    color: var(--gray-700) !important;
+    padding: 0.625rem 0.875rem !important; /* Reduced padding */
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-size: 0.95rem; /* Slightly smaller font */
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.nav-link:hover {
+    color: var(--primary) !important;
+    background: var(--primary-light);
+}
+
+.nav-link.active {
+    color: white !important;
+    background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+}
+
+/* Button styling within navbar */
+.navbar .btn {
+    border-radius: 8px;
+    padding: 0.625rem 1.25rem; /* Reduced padding */
+    font-weight: 600;
+    font-size: 0.95rem; /* Slightly smaller */
+    min-height: 44px; /* Reduced from 48px */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem; /* Reduced gap */
+    white-space: nowrap;
+    text-decoration: none;
+    border: none;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.navbar .btn-primary {
+    background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+    color: white;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+}
+
+.navbar .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(13, 110, 253, 0.3);
+}
+
+.navbar .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--primary);
+    border: 2px solid var(--primary);
+}
+
+.navbar .btn-secondary:hover {
+    background: var(--primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(13, 110, 253, 0.2);
+}
+
+/* Adjust spacing for nav items with buttons */
+.navbar-nav .nav-item.ms-2 {
+    margin-left: 0.5rem !important; /* Reduced from 0.75rem */
+}
+
+/* Optimize for smaller desktop screens */
+@media (max-width: 1199px) {
+    .navbar-brand {
+        font-size: 1.35rem;
+        max-width: 45%;
+    }
+    
+    .brand-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+    
+    .nav-link {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.9rem;
+    }
+    
+    .navbar .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        min-height: 40px;
+    }
+    
+    .navbar-nav .nav-item.ms-2 {
+        margin-left: 0.375rem !important;
+    }
+}
+
+/* Mobile menu styling */
+@media (max-width: 991px) {
+    .navbar-collapse {
+        padding-top: 1rem;
+    }
+    
+    .navbar-nav {
+        gap: 0.5rem;
+        width: 100%;
+    }
+    
+    .nav-item {
+        width: 100%;
+    }
+    
+    .nav-link {
+        padding: 0.875rem !important;
+        justify-content: center;
+        text-align: center;
+        font-size: 1rem;
+    }
+    
+    .navbar-nav .nav-item.ms-2 {
+        margin-left: 0 !important;
+        margin-top: 0.5rem;
+    }
+    
+    .navbar .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.875rem 1.5rem;
+        font-size: 1rem;
+        min-height: 48px;
+    }
+    
+    .navbar-toggler {
+        border: none;
+        padding: 0.5rem;
+        font-size: 1.25rem;
+        box-shadow: none;
+    }
+    
+    .navbar-toggler:focus {
+        box-shadow: none;
+        outline: none;
+    }
+    
+    .navbar-brand {
+        max-width: 70%; /* More space on mobile */
+        font-size: 1.4rem;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 576px) {
+    .navbar-brand {
+        font-size: 1.25rem;
+        max-width: 60%;
+    }
+    
+    .brand-icon {
+        width: 34px;
+        height: 34px;
+        font-size: 1rem;
+    }
+}
+
+/* Ensure navbar container uses available space efficiently */
+.navbar > .container {
+    padding-right: 12px;
+    padding-left: 12px;
+}
+
+/* Compress navbar on very small screens */
+@media (max-width: 360px) {
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    .brand-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+    }
+    
+    .navbar-brand span {
+        display: none; /* Hide full name on very small screens */
+    }
+    
+    .navbar-brand::after {
+        content: "AFSS";
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--primary);
+    }
+}
+
+/* Prevent navbar items from wrapping on desktop */
+@media (min-width: 992px) {
+    .navbar-collapse {
+        flex-grow: 0; /* Don't take extra space */
+        min-width: 0; /* Allow shrinking */
+    }
+    
+    .navbar-nav {
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+    }
+    
+    /* Compact layout for nav items */
+    .nav-item:not(.ms-2) {
+        margin-right: 0.125rem;
+    }
+}
+
+/* Hide text on buttons when space is tight */
+@media (max-width: 1100px) and (min-width: 992px) {
+    .navbar .btn .btn-text {
+        display: none;
+    }
+    
+    .navbar .btn {
+        padding: 0.625rem;
+        min-width: 44px;
+    }
+    
+    .navbar .btn i {
+        margin: 0;
+    }
+}
+/* Hover effect for active state */
+.nav-link.active:hover {
+    background: linear-gradient(90deg, var(--primary-dark), var(--primary));
+    transform: translateY(-2px);
+}
 
         /* Hero Section */
         .hero-section {
@@ -449,89 +685,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             font-weight: 500;
         }
 
-        /* Testimonials */
-        .testimonial-section {
-            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-            color: white;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .testimonial-section::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -20%;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
-            border-radius: 50%;
-        }
-
-        .testimonial-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            height: 100%;
-        }
-
-        .testimonial-text {
-            font-style: italic;
-            margin-bottom: 1.5rem;
-            line-height: 1.8;
-        }
-
-        .testimonial-author {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .author-avatar {
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 1.25rem;
-        }
-
-        .author-info h5 {
-            margin-bottom: 0.25rem;
-        }
-
-        .author-info p {
-            opacity: 0.8;
-            font-size: 0.875rem;
-            margin: 0;
-        }
-
-        /* CTA Section */
-        .cta-section {
-            background: linear-gradient(135deg, var(--success), var(--success-dark));
-            color: white;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .cta-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" opacity="0.1"><path d="M0,0L48,32C96,64,192,128,288,149.3C384,171,480,149,576,138.7C672,128,768,128,864,138.7C960,149,1056,171,1152,181.3C1248,192,1344,192,1392,192L1440,192L1440,800L1392,800C1344,800,1248,800,1152,800C1056,800,960,800,864,800C768,800,672,800,576,800C480,800,384,800,288,800C192,800,96,800,48,800L0,800Z" fill="white"/></svg>');
-            background-size: cover;
-            background-position: center;
-        }
+        
+    
 
         /* Footer */
         footer {
@@ -540,12 +695,19 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             padding: 5rem 0 2rem;
         }
 
+        .school-description {
+    color: var(--gray-400);
+    font-size: 0.875rem;
+    line-height: 1.7;
+    margin-bottom: 1.5rem;
+}
+
         .footer-section {
             margin-bottom: 3rem;
         }
 
         .footer-section h5 {
-            font-size: 1.25rem;
+            font-size: 1rem;
             margin-bottom: 1.5rem;
             color: white;
         }
@@ -583,7 +745,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 
         .social-links {
             display: flex;
-            gap: 1rem;
+            gap: 0.875rem;
             margin-top: 1.5rem;
         }
 
@@ -685,14 +847,12 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                     <li class="nav-item">
                         <a class="nav-link" href="#classes">Classes</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#testimonials">Testimonials</a>
-                    </li>
+                    
                     <li class="nav-item">
                         <a class="nav-link" href="#contact">Contact</a>
                     </li>
                     <li class="nav-item ms-2">
-                        <a href="login.php" class="btn btn-secondary">Login</a>
+                        <a href="student/login.php" class="btn btn-secondary">Login</a>
                     </li>
                     <li class="nav-item ms-2">
                         <a href="student/register.php" class="btn btn-primary">
@@ -709,8 +869,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         <div class="container">
             <div class="hero-content">
                 <h1 class="hero-title fade-in-up">
-                    Learn to Swim with<br>
-                    <span class="text-gradient">Confidence & Joy</span>
+                    Where Confidence Flows &<br>
+                    <span>Champions Grow</span>
                 </h1>
                 <p class="hero-subtitle fade-in-up delay-1">
                     <?= htmlspecialchars($school_description) ?>. Join Zimbabwe's premier swimming school offering 
@@ -843,92 +1003,11 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                 <h4 class="text-muted mb-3">Classes Coming Soon!</h4>
                 <p class="text-muted">We're currently scheduling our next batch of swimming classes. Check back soon or register to be notified.</p>
                 <a href="student/register.php" class="btn btn-primary mt-3">
-                    <i class="bi bi-bell me-2"></i> Notify Me
+                    <i class="bi bi-bell me-2"></i> View All Classes
                 </a>
             </div>
             <?php endif; ?>
-            <div class="text-center mt-5">
-                <a href="student/register.php" class="btn btn-primary">
-                    <i class="bi bi-eye me-2"></i> View All Classes
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Testimonials -->
-    <section class="testimonial-section" id="testimonials">
-        <div class="container">
-            <div class="section-title">
-                <h2>What Our <span class="text-gradient">Students Say</span></h2>
-                <p class="subtitle" style="color: rgba(255,255,255,0.8);">Join hundreds of satisfied students who transformed their swimming skills with us</p>
-            </div>
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="testimonial-card fade-in-up">
-                        <div class="testimonial-text">
-                            "Thanks to <?= htmlspecialchars($school_name) ?>, my daughter went from fearing water to swimming confidently. The instructors are amazing!"
-                        </div>
-                        <div class="testimonial-author">
-                            <div class="author-avatar">T</div>
-                            <div class="author-info">
-                                <h5>Tanaka Chikwava</h5>
-                                <p>Parent of Student</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="testimonial-card fade-in-up delay-1">
-                        <div class="testimonial-text">
-                            "As an adult learner, I was nervous about starting swimming lessons. The patient and professional instructors made me feel comfortable from day one."
-                        </div>
-                        <div class="testimonial-author">
-                            <div class="author-avatar">R</div>
-                            <div class="author-info">
-                                <h5>Rudo Moyo</h5>
-                                <p>Adult Student</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="testimonial-card fade-in-up delay-2">
-                        <div class="testimonial-text">
-                            "The progress tracking system is fantastic! I can see my improvement week by week. Highly recommend <?= htmlspecialchars($school_name) ?> to anyone wanting to learn swimming."
-                        </div>
-                        <div class="testimonial-author">
-                            <div class="author-avatar">K</div>
-                            <div class="author-info">
-                                <h5>Kuda Ndlovu</h5>
-                                <p>Competitive Swimmer</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- CTA Section -->
-    <section class="cta-section">
-        <div class="container">
-            <div class="row justify-content-center">
-                <div class="col-lg-8 text-center">
-                    <h2 class="mb-4 fade-in-up">Ready to Make a Splash?</h2>
-                    <p class="mb-5 fade-in-up delay-1" style="font-size: 1.125rem; opacity: 0.9;">
-                        Join Zimbabwe's premier swimming school today. Whether you're a beginner or looking to improve your skills, 
-                        we have the perfect class for you.
-                    </p>
-                    <div class="d-flex flex-wrap justify-content-center gap-3 fade-in-up delay-2">
-                        <a href="student/register.php" class="btn btn-light btn-lg">
-                            <i class="bi bi-person-plus me-2"></i> Start Learning Now
-                        </a>
-                        <a href="#contact" class="btn btn-outline-light btn-lg">
-                            <i class="bi bi-telephone me-2"></i> Contact Us
-                        </a>
-                    </div>
-                </div>
-            </div>
+            
         </div>
     </section>
 
@@ -943,7 +1022,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         </div>
                         <?= htmlspecialchars($school_name) ?>
                     </h5>
-                    <p class="text-muted mb-4"><?= htmlspecialchars($school_description) ?></p>
+                    <p class="school-description"><?= htmlspecialchars($school_description) ?></p>
                     <div class="social-links">
                         <a href="#"><i class="bi bi-facebook"></i></a>
                         <a href="#"><i class="bi bi-twitter"></i></a>
@@ -957,7 +1036,6 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         <li><a href="#home">Home</a></li>
                         <li><a href="#about">About Us</a></li>
                         <li><a href="#classes">Classes</a></li>
-                        <li><a href="#testimonials">Testimonials</a></li>
                         <li><a href="#contact">Contact</a></li>
                     </ul>
                 </div>
@@ -987,7 +1065,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         </p>
                         <p class="mb-0">
                             <i class="bi bi-clock"></i>
-                            Mon-Fri: 8AM-8PM, Sat: 9AM-5PM, Sun: 10AM-4PM
+                            Mon-Fri: 8AM-5PM
                         </p>
                     </div>
                 </div>

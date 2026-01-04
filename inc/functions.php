@@ -44,4 +44,25 @@ function getSetting($conn, $key, $default = '') {
     }
     return $default;
 }
+
+/**
+ * Log an activity to the `activity_log` table if it exists.
+ * Fails silently if the table or DB is not available.
+ */
+function logActivity($conn, $user_id, $action, $details = '') {
+    if (empty($conn) || !$user_id || empty($action)) return false;
+    try {
+        $stmt = $conn->prepare("INSERT INTO activity_log (user_id, action, details, created_at) VALUES (?, ?, ?, NOW())");
+        if ($stmt) {
+            $stmt->bind_param('iss', $user_id, $action, $details);
+            $stmt->execute();
+            $stmt->close();
+            return true;
+        }
+    } catch (Exception $e) {
+        // Ignore logging errors to avoid breaking the app
+        error_log('logActivity error: ' . $e->getMessage());
+    }
+    return false;
+}
 ?>
