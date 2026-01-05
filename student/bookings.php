@@ -11,6 +11,56 @@ $student_id = $_SESSION['user_id'];
 $success_message = '';
 $error_message = '';
 
+// Handle new booking request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_booking'])) {
+    $class_id = intval($_POST['class_id']);
+    $child_name = trim($_POST['child_name'] ?? '');
+    $child_age = $_POST['child_age'] !== '' ? intval($_POST['child_age']) : null;
+    $child_gender = $_POST['child_gender'] ?? null;
+    $special_notes = trim($_POST['special_notes'] ?? '');
+    
+    // Check if class exists and has available slots
+    $check_stmt = $conn->prepare("SELECT title, start_time, slots_available, max_capacity, price FROM classes WHERE id = ? AND start_time >= NOW() AND status = 'scheduled'");
+    $check_stmt->bind_param('i', $class_id);
+    $check_stmt->execute();
+    $class_result = $check_stmt->get_result();
+    
+    if ($class_result->num_rows > 0) {
+        $class = $class_result->fetch_assoc();
+        
+        // Check if slots are available
+        if ($class['slots_available'] > 0) {
+            // Check if student already has a booking for this class
+            $existing_stmt = $conn->prepare("SELECT id FROM bookings WHERE user_id = ? AND class_id = ? AND status IN ('pending', 'confirmed')");
+            $existing_stmt->bind_param('ii', $student_id, $class_id);
+            $existing_stmt->execute();
+            
+            if ($existing_stmt->get_result()->num_rows == 0) {
+                // Create booking with 'pending' status
+                $stmt = $conn->prepare("INSERT INTO bookings (user_id, class_id, child_name, child_age, child_gender, special_notes, status, booking_date, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())");
+                $stmt->bind_param('iisisss', $student_id, $class_id, $child_name, $child_age, $child_gender, $special_notes);
+                
+                if ($stmt->execute()) {
+                    $success_message = "Booking request submitted successfully! Please wait for admin approval.";
+                    header("Location: bookings.php?success=" . urlencode($success_message));
+                    exit();
+                } else {
+                    $error_message = "Failed to submit booking request. Please try again.";
+                }
+                $stmt->close();
+            } else {
+                $error_message = "You already have a booking for this class.";
+            }
+            $existing_stmt->close();
+        } else {
+            $error_message = "No available slots for this class.";
+        }
+    } else {
+        $error_message = "Class not found or not available for booking.";
+    }
+    $check_stmt->close();
+}
+
 // Handle booking cancellation
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
     $booking_id = intval($_POST['booking_id']);
@@ -19,8 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
     $conn->begin_transaction();
     
     try {
-        // Get class_id from booking
-        $stmt = $conn->prepare("SELECT class_id FROM bookings WHERE id = ? AND user_id = ?");
+        // Get class_id and status from booking
+        $stmt = $conn->prepare("SELECT class_id, status FROM bookings WHERE id = ? AND user_id = ?");
         $stmt->bind_param('ii', $booking_id, $student_id);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -28,19 +78,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancel_booking'])) {
         if ($result->num_rows > 0) {
             $booking = $result->fetch_assoc();
             $class_id = $booking['class_id'];
+            $current_status = $booking['status'];
             
             // Update booking status to cancelled
             $update_stmt = $conn->prepare("UPDATE bookings SET status = 'cancelled', cancellation_date = NOW() WHERE id = ? AND user_id = ?");
             $update_stmt->bind_param('ii', $booking_id, $student_id);
             $update_stmt->execute();
             
-            // Increment available slots
-            $slots_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available + 1 WHERE id = ?");
-            $slots_stmt->bind_param('i', $class_id);
-            $slots_stmt->execute();
+            // If booking was confirmed, increment available slots
+            if ($current_status === 'confirmed') {
+                $slots_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available + 1 WHERE id = ?");
+                $slots_stmt->bind_param('i', $class_id);
+                $slots_stmt->execute();
+                $slots_stmt->close();
+            }
             
             $conn->commit();
-            $success_message = "Booking cancelled successfully. Your slot has been freed.";
+            $success_message = "Booking cancelled successfully.";
             
             // Refresh page
             header("Location: bookings.php?success=" . urlencode($success_message));
@@ -62,26 +116,57 @@ if (isset($_GET['error'])) {
     $error_message = htmlspecialchars($_GET['error']);
 }
 
-// Get active bookings
-$active_bookings = $conn->query("
+// Get all bookings
+$all_bookings = $conn->query("
     SELECT b.*, c.title, c.start_time, c.end_time, c.age_group, c.price, 
            i.name as instructor_name, c.slots_available, c.max_capacity
     FROM bookings b
     JOIN classes c ON b.class_id = c.id
     LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE b.user_id = $student_id AND b.status = 'confirmed'
-    ORDER BY c.start_time ASC
+    WHERE b.user_id = $student_id
+    ORDER BY 
+        CASE b.status
+            WHEN 'pending' THEN 1
+            WHEN 'confirmed' THEN 2
+            WHEN 'cancelled' THEN 3
+            ELSE 4
+        END,
+        c.start_time ASC
 ")->fetch_all(MYSQLI_ASSOC);
 
-// Get cancelled bookings
-$cancelled_bookings = $conn->query("
-    SELECT b.*, c.title, c.start_time, c.end_time, i.name as instructor_name
-    FROM bookings b
-    JOIN classes c ON b.class_id = c.id
+// Count bookings by status
+$pending_count = 0;
+$confirmed_count = 0;
+$cancelled_count = 0;
+$upcoming_count = 0;
+
+foreach ($all_bookings as $booking) {
+    switch ($booking['status']) {
+        case 'pending': $pending_count++; break;
+        case 'confirmed': 
+            $confirmed_count++;
+            if (strtotime($booking['start_time']) > time()) {
+                $upcoming_count++;
+            }
+            break;
+        case 'cancelled': $cancelled_count++; break;
+    }
+}
+
+// Get available classes for booking
+$available_classes = $conn->query("
+    SELECT c.*, i.name as instructor_name
+    FROM classes c
     LEFT JOIN instructors i ON c.instructor_id = i.id
-    WHERE b.user_id = $student_id AND b.status = 'cancelled'
-    ORDER BY b.cancellation_date DESC
-    LIMIT 10
+    WHERE c.start_time >= NOW() 
+    AND c.status = 'scheduled'
+    AND c.slots_available > 0
+    AND c.id NOT IN (
+        SELECT class_id FROM bookings 
+        WHERE user_id = $student_id 
+        AND status IN ('pending', 'confirmed')
+    )
+    ORDER BY c.start_time ASC
 ")->fetch_all(MYSQLI_ASSOC);
 ?>
 <!DOCTYPE html>
@@ -135,7 +220,7 @@ $cancelled_bookings = $conn->query("
             min-height: 100vh;
         }
 
-        /* Sidebar Styling - Same as classes.php */
+        /* Sidebar Styling */
         .sidebar {
             width: 260px;
             background: white;
@@ -376,14 +461,19 @@ $cancelled_bookings = $conn->query("
             color: var(--primary);
         }
 
+        .stat-icon.warning {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: var(--warning);
+        }
+
         .stat-icon.success {
             background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
             color: var(--success);
         }
 
-        .stat-icon.warning {
-            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-            color: var(--warning);
+        .stat-icon.secondary {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            color: var(--gray-600);
         }
 
         .stat-value {
@@ -397,6 +487,52 @@ $cancelled_bookings = $conn->query("
             color: var(--gray-500);
             font-size: 14px;
             font-weight: 500;
+        }
+
+        /* Action Button */
+        .action-button {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
+        }
+
+        .action-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+            color: white;
+        }
+
+        /* Status Badges */
+        .booking-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: white;
+        }
+
+        .badge-pending {
+            background: linear-gradient(135deg, var(--warning) 0%, #d97706 100%);
+        }
+
+        .badge-confirmed {
+            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+        }
+
+        .badge-cancelled {
+            background: linear-gradient(135deg, var(--gray-400) 0%, var(--gray-500) 100%);
         }
 
         /* Booking Cards */
@@ -427,25 +563,6 @@ $cancelled_bookings = $conn->query("
             font-weight: 600;
             color: var(--gray-900);
             margin: 0;
-        }
-
-        .booking-badge {
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .badge-confirmed {
-            background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
-            color: white;
-        }
-
-        .badge-cancelled {
-            background: linear-gradient(135deg, var(--gray-400) 0%, var(--gray-500) 100%);
-            color: white;
         }
 
         .booking-details {
@@ -537,6 +654,67 @@ $cancelled_bookings = $conn->query("
             margin-right: auto;
         }
 
+        /* Modal Styling */
+        .modal-content {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            padding: 20px 30px;
+        }
+
+        .modal-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+        }
+
+        .btn-close-white {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+
+        /* Booking Action Card */
+        .booking-action-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #e6f0ff 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px solid var(--primary);
+            box-shadow: 0 4px 20px rgba(13, 110, 253, 0.1);
+        }
+
+        /* Floating Action Button */
+        .floating-action-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 28px;
+            box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
+            z-index: 1000;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+
+        .floating-action-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 10px 30px rgba(13, 110, 253, 0.6);
+            color: white;
+        }
+
         /* Responsive Design */
         @media (max-width: 992px) {
             .sidebar {
@@ -586,6 +764,36 @@ $cancelled_bookings = $conn->query("
             
             .btn-cancel {
                 width: 100%;
+            }
+            
+            .booking-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .floating-action-button {
+                bottom: 20px;
+                right: 20px;
+                width: 60px;
+                height: 60px;
+                font-size: 24px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .stats-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .floating-action-button {
+                bottom: 15px;
+                right: 15px;
+                width: 55px;
+                height: 55px;
+                font-size: 22px;
             }
         }
     </style>
@@ -688,63 +896,121 @@ $cancelled_bookings = $conn->query("
             <!-- Stats Section -->
             <div class="stats-container fade-in">
                 <div class="stat-card">
-                    <div class="stat-icon primary">
-                        <i class="bi bi-calendar-check"></i>
+                    <div class="stat-icon warning">
+                        <i class="bi bi-clock-history"></i>
                     </div>
-                    <div class="stat-value"><?= count($active_bookings) ?></div>
-                    <div class="stat-label">Active Bookings</div>
+                    <div class="stat-value"><?= $pending_count ?></div>
+                    <div class="stat-label">Pending Approval</div>
                 </div>
                 
                 <div class="stat-card">
                     <div class="stat-icon success">
                         <i class="bi bi-check-circle"></i>
                     </div>
-                    <div class="stat-value"><?= count($cancelled_bookings) ?></div>
-                    <div class="stat-label">Cancelled Bookings</div>
+                    <div class="stat-value"><?= $confirmed_count ?></div>
+                    <div class="stat-label">Confirmed</div>
                 </div>
                 
                 <div class="stat-card">
-                    <div class="stat-icon warning">
-                        <i class="bi bi-clock-history"></i>
+                    <div class="stat-icon primary">
+                        <i class="bi bi-calendar-check"></i>
                     </div>
-                    <?php
-                    $upcoming_count = 0;
-                    foreach ($active_bookings as $booking) {
-                        if (strtotime($booking['start_time']) > time()) {
-                            $upcoming_count++;
-                        }
-                    }
-                    ?>
                     <div class="stat-value"><?= $upcoming_count ?></div>
-                    <div class="stat-label">Upcoming Classes</div>
+                    <div class="stat-label">Upcoming</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon secondary">
+                        <i class="bi bi-x-circle"></i>
+                    </div>
+                    <div class="stat-value"><?= $cancelled_count ?></div>
+                    <div class="stat-label">Cancelled</div>
                 </div>
             </div>
 
-            <!-- Active Bookings Section -->
+            <!-- Booking Action Card -->
+            <div class="booking-action-card fade-in">
+                <div class="text-center">
+                    <h3 class="mb-3" style="color: var(--primary);">
+                        <i class="bi bi-calendar-check me-2"></i> Ready to Book a Class?
+                    </h3>
+                    <p class="mb-4 text-muted">
+                        Find the perfect class time and secure your spot today
+                    </p>
+                    
+                    <div class="row justify-content-center">
+                        <div class="col-md-8 col-lg-6">
+                            <div class="d-grid gap-3">
+                                <!-- Primary Booking Button -->
+                                <button type="button" class="btn btn-primary btn-lg py-3" 
+                                        data-bs-toggle="modal" data-bs-target="#bookClassModal"
+                                        style="font-size: 18px; font-weight: 600;">
+                                    <i class="bi bi-calendar-plus me-2"></i> Book New Swimming Class
+                                </button>
+                                
+                                <!-- Browse Classes Link -->
+                                <a href="classes.php" class="btn btn-outline-primary btn-lg py-3">
+                                    <i class="bi bi-search me-2"></i> Browse All Available Classes
+                                </a>
+                            </div>
+                            
+                            <!-- Available Classes Count -->
+                            <div class="mt-4">
+                                <?php if(!empty($available_classes)): ?>
+                                    <div class="alert alert-success d-inline-flex align-items-center">
+                                        <i class="bi bi-check-circle-fill me-2"></i>
+                                        <span>
+                                            <strong><?= count($available_classes) ?></strong> 
+                                            <?= count($available_classes) == 1 ? 'class is' : 'classes are' ?> available for booking
+                                        </span>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="alert alert-warning d-inline-flex align-items-center">
+                                        <i class="bi bi-info-circle-fill me-2"></i>
+                                        <span>No classes available at the moment. Please check back later.</span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bookings Section -->
             <div class="fade-in">
-                <h2 class="mb-4" style="font-family: 'Poppins', sans-serif; font-weight: 600;">Active Bookings</h2>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 style="font-family: 'Poppins', sans-serif; font-weight: 600;">My Bookings</h2>
+                    <span class="badge bg-primary">
+                        Total: <?= count($all_bookings) ?>
+                    </span>
+                </div>
                 
-                <?php if(empty($active_bookings)): ?>
+                <?php if(empty($all_bookings)): ?>
                     <div class="empty-state">
                         <i class="bi bi-calendar-x"></i>
-                        <h3>No Active Bookings</h3>
-                        <p>You haven't booked any swimming classes yet. Browse available classes to get started.</p>
-                        <a href="classes.php" class="btn-primary" style="display: inline-block; padding: 12px 24px; text-decoration: none;">
-                            <i class="bi bi-calendar-plus me-2"></i>Browse Classes
-                        </a>
+                        <h3>No Bookings Yet</h3>
+                        <p>You haven't booked any swimming classes yet. Click the button above to book your first class.</p>
+                        <div class="d-flex justify-content-center gap-3">
+                            <button type="button" class="action-button" data-bs-toggle="modal" data-bs-target="#bookClassModal">
+                                <i class="bi bi-calendar-plus"></i> Book Your First Class
+                            </button>
+                            <a href="classes.php" class="btn btn-outline-primary btn-lg">
+                                <i class="bi bi-calendar-week"></i> Browse Classes
+                            </a>
+                        </div>
                     </div>
                 <?php else: ?>
-                    <?php foreach($active_bookings as $booking): 
+                    <?php foreach($all_bookings as $booking): 
                         $start_time = strtotime($booking['start_time']);
                         $end_time = strtotime($booking['end_time']);
-                        $duration_minutes = ($end_time - $start_time) / 60;
                         $is_upcoming = $start_time > time();
+                        $status = $booking['status'];
                     ?>
                         <div class="booking-card">
                             <div class="booking-header">
                                 <h3 class="booking-title"><?= htmlspecialchars($booking['title']) ?></h3>
-                                <span class="booking-badge badge-confirmed">
-                                    <?= $is_upcoming ? 'Upcoming' : 'Completed' ?>
+                                <span class="booking-badge badge-<?= $status ?>">
+                                    <?= ucfirst($status) ?>
                                 </span>
                             </div>
                             
@@ -763,9 +1029,27 @@ $cancelled_bookings = $conn->query("
                                 </div>
                                 
                                 <div class="detail-box">
-                                    <div class="detail-label">Age Group</div>
-                                    <div class="detail-value"><?= htmlspecialchars($booking['age_group']) ?></div>
+                                    <div class="detail-label">Status</div>
+                                    <div class="detail-value">
+                                        <?php if($status == 'pending'): ?>
+                                            <span class="text-warning"><i class="bi bi-clock me-1"></i> Awaiting Approval</span>
+                                        <?php elseif($status == 'confirmed'): ?>
+                                            <span class="text-success"><i class="bi bi-check-circle me-1"></i> Confirmed</span>
+                                        <?php else: ?>
+                                            <span class="text-danger"><i class="bi bi-x-circle me-1"></i> Cancelled</span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
+                                
+                                <?php if($booking['child_name']): ?>
+                                    <div class="detail-box">
+                                        <div class="detail-label">Child</div>
+                                        <div class="detail-value">
+                                            <?= htmlspecialchars($booking['child_name']) ?> 
+                                            (Age: <?= $booking['child_age'] ?>, <?= ucfirst($booking['child_gender']) ?>)
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
                                 
                                 <div class="detail-box">
                                     <div class="detail-label">Price</div>
@@ -776,20 +1060,23 @@ $cancelled_bookings = $conn->query("
                                     <div class="detail-label">Booking Date</div>
                                     <div class="detail-value"><?= date('F j, Y', strtotime($booking['booking_date'])) ?></div>
                                 </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Slots</div>
-                                    <div class="detail-value">
-                                        <?= $booking['slots_available'] ?> of <?= $booking['max_capacity'] ?> available
-                                    </div>
-                                </div>
                             </div>
                             
-                            <?php if($is_upcoming): ?>
+                            <?php if($status == 'pending'): ?>
                                 <div class="booking-actions">
                                     <form method="POST">
                                         <input type="hidden" name="booking_id" value="<?= $booking['id'] ?>">
-                                        <button type="submit" name="cancel_booking" class="btn-cancel" onclick="return confirm('Are you sure you want to cancel this booking?')">
+                                        <button type="submit" name="cancel_booking" class="btn-cancel" onclick="return confirm('Are you sure you want to cancel this booking request?')">
+                                            <i class="bi bi-x-circle"></i>
+                                            Cancel Request
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php elseif($status == 'confirmed' && $is_upcoming): ?>
+                                <div class="booking-actions">
+                                    <form method="POST">
+                                        <input type="hidden" name="booking_id" value="<?= $booking['id'] ?>">
+                                        <button type="submit" name="cancel_booking" class="btn-cancel" onclick="return confirm('Are you sure you want to cancel this confirmed booking?')">
                                             <i class="bi bi-x-circle"></i>
                                             Cancel Booking
                                         </button>
@@ -800,47 +1087,183 @@ $cancelled_bookings = $conn->query("
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
+        </main>
+    </div>
 
-            <!-- Cancelled Bookings Section -->
-            <?php if(!empty($cancelled_bookings)): ?>
-                <div class="fade-in mt-5">
-                    <h2 class="mb-4" style="font-family: 'Poppins', sans-serif; font-weight: 600;">Cancelled Bookings</h2>
-                    
-                    <?php foreach($cancelled_bookings as $booking): 
-                        $start_time = strtotime($booking['start_time']);
-                    ?>
-                        <div class="booking-card" style="opacity: 0.8;">
-                            <div class="booking-header">
-                                <h3 class="booking-title"><?= htmlspecialchars($booking['title']) ?></h3>
-                                <span class="booking-badge badge-cancelled">Cancelled</span>
+    <!-- Floating Action Button -->
+    <a href="#" class="floating-action-button" data-bs-toggle="modal" data-bs-target="#bookClassModal">
+        <i class="bi bi-plus-lg"></i>
+    </a>
+
+    <!-- Book Class Modal -->
+    <div class="modal fade" id="bookClassModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Book Swimming Class</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label class="form-label required">Select Class</label>
+                                <select name="class_id" class="form-select" required>
+                                    <option value="">Choose a class...</option>
+                                    <?php foreach($available_classes as $class): 
+                                        $start_time = strtotime($class['start_time']);
+                                        $end_time = strtotime($class['end_time']);
+                                    ?>
+                                        <option value="<?= $class['id'] ?>">
+                                            <?= htmlspecialchars($class['title']) ?> - 
+                                            <?= date('M j, Y', $start_time) ?> 
+                                            <?= date('g:i A', $start_time) ?>-<?= date('g:i A', $end_time) ?>
+                                            (<?= $class['slots_available'] ?> slots available)
+                                            <?php if($class['instructor_name']): ?>
+                                                - Instructor: <?= htmlspecialchars($class['instructor_name']) ?>
+                                            <?php endif; ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <?php if(empty($available_classes)): ?>
+                                    <div class="alert alert-warning mt-2">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        No classes available at the moment. Please check back later or contact the administrator.
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             
-                            <div class="booking-details">
-                                <div class="detail-box">
-                                    <div class="detail-label">Class Date</div>
-                                    <div class="detail-value"><?= date('F j, Y', $start_time) ?></div>
+                            <div class="col-md-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="forChild" onclick="toggleChildFields()">
+                                    <label class="form-check-label" for="forChild">
+                                        <i class="bi bi-person-plus me-1"></i> This booking is for a child
+                                    </label>
                                 </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Instructor</div>
-                                    <div class="detail-value"><?= htmlspecialchars($booking['instructor_name'] ?? 'TBA') ?></div>
-                                </div>
-                                
-                                <div class="detail-box">
-                                    <div class="detail-label">Cancellation Date</div>
-                                    <div class="detail-value"><?= date('F j, Y', strtotime($booking['cancellation_date'])) ?></div>
+                            </div>
+                            
+                            <div class="col-md-6 child-fields" style="display: none;">
+                                <label class="form-label">Child's Name</label>
+                                <input type="text" name="child_name" class="form-control" placeholder="Enter child's name">
+                            </div>
+                            
+                            <div class="col-md-3 child-fields" style="display: none;">
+                                <label class="form-label">Child's Age</label>
+                                <input type="number" name="child_age" class="form-control" min="1" max="18" placeholder="Age">
+                            </div>
+                            
+                            <div class="col-md-3 child-fields" style="display: none;">
+                                <label class="form-label">Child's Gender</label>
+                                <select name="child_gender" class="form-select">
+                                    <option value="">Select</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label">Special Notes (Optional)</label>
+                                <textarea name="special_notes" class="form-control" rows="3" placeholder="Any special requirements, medical conditions, or notes..."></textarea>
+                            </div>
+                            
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <strong>Important:</strong> Your booking will be submitted for admin approval. 
+                                    You'll receive a confirmation once approved. Cancellation may be subject to fees.
                                 </div>
                             </div>
                         </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </main>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="request_booking" class="btn btn-primary" <?= empty($available_classes) ? 'disabled' : '' ?>>
+                            <i class="bi bi-send me-2"></i> Submit Booking Request
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            console.log("DEBUG: Student Bookings Page Loaded");
+            
+            // Toggle child fields
+            function toggleChildFields() {
+                const childFields = document.querySelectorAll('.child-fields');
+                const forChild = document.getElementById('forChild').checked;
+                
+                childFields.forEach(field => {
+                    field.style.display = forChild ? 'block' : 'none';
+                });
+            }
+            
+            // Attach event to checkbox
+            const forChildCheckbox = document.getElementById('forChild');
+            if (forChildCheckbox) {
+                forChildCheckbox.addEventListener('change', toggleChildFields);
+                console.log("DEBUG: Child checkbox found and event attached");
+            } else {
+                console.warn("WARNING: Child checkbox not found");
+            }
+            
+            // Check if booking modal button works
+            const bookButtons = document.querySelectorAll('[data-bs-target="#bookClassModal"]');
+            console.log("DEBUG: Found", bookButtons.length, "book buttons");
+            
+            bookButtons.forEach((button, index) => {
+                button.addEventListener('click', function() {
+                    console.log("DEBUG: Book button #" + (index + 1) + " clicked");
+                    
+                    // Check if modal exists
+                    const modal = document.getElementById('bookClassModal');
+                    if (!modal) {
+                        console.error("ERROR: Book modal not found!");
+                        alert("Error: Booking system not available. Please contact administrator.");
+                        return false;
+                    }
+                    
+                    // Check if there are available classes
+                    const classSelect = modal.querySelector('select[name="class_id"]');
+                    if (classSelect && classSelect.options.length <= 1) {
+                        alert("No classes available for booking at the moment. Please check back later.");
+                        return false;
+                    }
+                });
+            });
+            
+            // Check if modal exists
+            const modal = document.getElementById('bookClassModal');
+            if (modal) {
+                console.log("DEBUG: Book modal found");
+                
+                // Check for available classes in modal
+                modal.addEventListener('show.bs.modal', function() {
+                    const classSelect = this.querySelector('select[name="class_id"]');
+                    const submitBtn = this.querySelector('button[name="request_booking"]');
+                    
+                    if (classSelect && classSelect.options.length <= 1) {
+                        console.warn("WARNING: No available classes in modal");
+                        if (submitBtn) {
+                            submitBtn.disabled = true;
+                            submitBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i> No Classes Available';
+                        }
+                    } else {
+                        console.log("DEBUG: Available classes found:", classSelect.options.length - 1);
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '<i class="bi bi-send me-2"></i> Submit Booking Request';
+                        }
+                    }
+                });
+            } else {
+                console.error("ERROR: Book modal not found in DOM");
+            }
+            
             // Add animation to booking cards
             const cards = document.querySelectorAll('.booking-card');
             cards.forEach((card, index) => {
@@ -851,40 +1274,69 @@ $cancelled_bookings = $conn->query("
             // Confirmation for cancellation
             const cancelForms = document.querySelectorAll('form[method="POST"]');
             cancelForms.forEach(form => {
-                form.addEventListener('submit', function(e) {
-                    const button = this.querySelector('button[type="submit"]');
-                    const classTitle = this.closest('.booking-card').querySelector('.booking-title').textContent;
-                    
-                    // Show loading state
-                    const originalText = button.innerHTML;
-                    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Cancelling...';
-                    button.disabled = true;
-                    
-                    // Revert after 3 seconds if form doesn't submit
-                    setTimeout(() => {
-                        if (!button.disabled) {
-                            button.innerHTML = originalText;
+                const cancelBtn = form.querySelector('button[name="cancel_booking"]');
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', function(e) {
+                        if (!confirm('Are you sure you want to cancel this booking?')) {
+                            e.preventDefault();
+                            return false;
                         }
-                    }, 3000);
-                });
+                        
+                        // Show loading state
+                        const originalText = this.innerHTML;
+                        this.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+                        this.disabled = true;
+                        
+                        // Revert after 3 seconds if form doesn't submit
+                        setTimeout(() => {
+                            if (this.disabled) {
+                                this.innerHTML = originalText;
+                                this.disabled = false;
+                            }
+                        }, 3000);
+                    });
+                }
             });
             
             // Add count-up animation to stats
             const statValues = document.querySelectorAll('.stat-value');
             statValues.forEach(stat => {
                 const target = parseInt(stat.textContent);
-                let current = 0;
-                const increment = Math.ceil(target / 20);
-                
-                const timer = setInterval(() => {
-                    current += increment;
-                    if (current >= target) {
-                        current = target;
-                        clearInterval(timer);
-                    }
-                    stat.textContent = current;
-                }, 50);
+                if (!isNaN(target) && target > 0) {
+                    let current = 0;
+                    const increment = Math.ceil(target / 30);
+                    
+                    const timer = setInterval(() => {
+                        current += increment;
+                        if (current >= target) {
+                            current = target;
+                            clearInterval(timer);
+                        }
+                        stat.textContent = current;
+                    }, 50);
+                }
             });
+            
+            // Auto-close alerts after 5 seconds
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    const bsAlert = new bootstrap.Alert(alert);
+                    bsAlert.close();
+                }, 5000);
+            });
+            
+            // Emergency fallback for modal if Bootstrap fails
+            if (typeof bootstrap === 'undefined') {
+                console.error("ERROR: Bootstrap not loaded!");
+                const emergencyDiv = document.createElement('div');
+                emergencyDiv.className = 'alert alert-danger text-center';
+                emergencyDiv.innerHTML = `
+                    <h4><i class="bi bi-exclamation-triangle me-2"></i> System Error</h4>
+                    <p>Booking system requires Bootstrap. Please contact administrator.</p>
+                `;
+                document.querySelector('.main-content').prepend(emergencyDiv);
+            }
         });
     </script>
 </body>

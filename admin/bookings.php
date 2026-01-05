@@ -14,6 +14,63 @@ $admin_id = $_SESSION['user_id'];
 $success_msg = '';
 $error_msg = '';
 
+// Function to send email notifications
+function sendBookingNotification($conn, $booking_id, $action) {
+    // Get booking details
+    $stmt = $conn->prepare("
+        SELECT u.email, u.name as student_name, c.title as class_name, 
+               DATE_FORMAT(c.start_time, '%W, %M %d, %Y at %h:%i %p') as class_time
+        FROM bookings b
+        JOIN users u ON b.user_id = u.id
+        JOIN classes c ON b.class_id = c.id
+        WHERE b.id = ?
+    ");
+    $stmt->bind_param("i", $booking_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $booking = $result->fetch_assoc();
+        $student_email = $booking['email'];
+        $student_name = $booking['student_name'];
+        $class_name = $booking['class_name'];
+        $class_time = $booking['class_time'];
+        
+        // Get school info
+        $school_stmt = $conn->prepare("SELECT setting_value FROM settings WHERE setting_key = 'school_name'");
+        $school_stmt->execute();
+        $school_result = $school_stmt->get_result();
+        $school = $school_result->fetch_assoc();
+        $school_name = $school['setting_value'] ?? 'Swimming School';
+        
+        // Prepare email content based on action
+        $subject = '';
+        $message = '';
+        
+        switch ($action) {
+            case 'confirmed':
+                $subject = "Booking Confirmed: $class_name";
+                $message = "Dear $student_name,\n\nYour booking for '$class_name' on $class_time has been confirmed.\n\nThank you for choosing $school_name!";
+                break;
+            case 'rejected':
+                $subject = "Booking Request Declined: $class_name";
+                $message = "Dear $student_name,\n\nUnfortunately, your booking request for '$class_name' on $class_time could not be approved at this time.\n\nPlease contact us for more information.\n\n$school_name Team";
+                break;
+            case 'cancelled':
+                $subject = "Booking Cancelled: $class_name";
+                $message = "Dear $student_name,\n\nYour booking for '$class_name' on $class_time has been cancelled.\n\n$school_name Team";
+                break;
+        }
+        
+        // Send email (you would implement your email sending logic here)
+        // For example: mail($student_email, $subject, $message);
+        
+        // Log the notification
+        error_log("Notification sent to $student_email: $subject");
+    }
+    $stmt->close();
+}
+
 // Get school info from settings
 $school_name = "Elite Swimming Academy";
 $school_email = "admin@aquaflow.com";
@@ -127,7 +184,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_status'])) {
                         }
                     }
                 }
+            } elseif ($status == 'cancelled' || $status == 'rejected') {
+                // If cancelling a confirmed booking, restore slots
+                $check_stmt = $conn->prepare("SELECT class_id FROM bookings WHERE id = ? AND status = 'confirmed'");
+                $check_stmt->bind_param("i", $booking_id);
+                $check_stmt->execute();
+                $check_result = $check_stmt->get_result();
+                
+                if ($check_result->num_rows > 0) {
+                    $row = $check_result->fetch_assoc();
+                    $slot_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available + 1 WHERE id = ?");
+                    $slot_stmt->bind_param("i", $row['class_id']);
+                    $slot_stmt->execute();
+                    $slot_stmt->close();
+                }
+                $check_stmt->close();
             }
+            
+            // Send notification email
+            sendBookingNotification($conn, $booking_id, $status);
             
             $_SESSION['success_msg'] = "Booking status updated successfully!";
             header("Location: bookings.php");
@@ -440,6 +515,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['bulk_action'])) {
                     $_SESSION['success_msg'] = "Selected bookings confirmed successfully!";
                 } else {
                     $error_msg = "Failed to confirm bookings.";
+                }
+                $update_stmt->close();
+            } elseif ($action == 'reject') {
+                $update_stmt = $conn->prepare("UPDATE bookings SET status = 'rejected' WHERE id IN ($placeholders) AND status = 'pending'");
+                $update_stmt->bind_param($types, ...$selected_bookings);
+                
+                if ($update_stmt->execute()) {
+                    $_SESSION['success_msg'] = "Selected bookings rejected successfully!";
+                } else {
+                    $error_msg = "Failed to reject bookings.";
                 }
                 $update_stmt->close();
             } elseif ($action == 'cancel') {
@@ -880,6 +965,7 @@ if ($user_stmt) {
         .stat-card:nth-child(3)::before { background: linear-gradient(90deg, var(--danger), #bb2d3b); }
         .stat-card:nth-child(4)::before { background: linear-gradient(90deg, var(--info), #0891b2); }
         .stat-card:nth-child(5)::before { background: linear-gradient(90deg, #6c757d, #495057); }
+        .stat-card:nth-child(6)::before { background: linear-gradient(90deg, #6c757d, #495057); }
         
         .stat-icon {
             width: 56px;
@@ -898,6 +984,7 @@ if ($user_stmt) {
         .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, var(--danger) 0%, #bb2d3b 100%); }
         .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, var(--info) 0%, #0891b2 100%); }
         .stat-card:nth-child(5) .stat-icon { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .stat-card:nth-child(6) .stat-icon { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
         
         .stat-content h3 {
             font-size: 32px;
@@ -973,6 +1060,14 @@ if ($user_stmt) {
             color: #495057;
         }
         
+        /* Quick Filters */
+        .quick-filters {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
         /* Table */
         .table-responsive {
             border-radius: 12px;
@@ -1017,6 +1112,7 @@ if ($user_stmt) {
         .status-pending { background: rgba(255, 193, 7, 0.1); color: var(--warning); border: 1px solid rgba(255, 193, 7, 0.2); }
         .status-confirmed { background: rgba(25, 135, 84, 0.1); color: var(--success); border: 1px solid rgba(25, 135, 84, 0.2); }
         .status-cancelled { background: rgba(220, 53, 69, 0.1); color: var(--danger); border: 1px solid rgba(220, 53, 69, 0.2); }
+        .status-rejected { background: rgba(108, 117, 125, 0.1); color: #6c757d; border: 1px solid rgba(108, 117, 125, 0.2); }
         .status-completed { background: rgba(13, 202, 240, 0.1); color: var(--info); border: 1px solid rgba(13, 202, 240, 0.2); }
         
         /* Payment Status Badges */
@@ -1279,6 +1375,9 @@ if ($user_stmt) {
                     <a href="bookings.php" class="nav-link active">
                         <i class="bi bi-journal-check"></i>
                         <span class="nav-text">Bookings</span>
+                        <?php $pending_count = $booking_stats['pending'] ?? 0; if ($pending_count > 0): ?>
+                            <span class="badge bg-warning text-dark ms-auto"><?= $pending_count ?></span>
+                        <?php endif; ?>
                     </a>
                 </div>
                 <div class="nav-item">
@@ -1359,6 +1458,16 @@ if ($user_stmt) {
                 
                 <div class="stat-card">
                     <div class="stat-icon">
+                        <i class="bi bi-slash-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3><?= $booking_stats['rejected'] ?? 0 ?></h3>
+                        <p>Rejected Bookings</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
                         <i class="bi bi-check-all"></i>
                     </div>
                     <div class="stat-content">
@@ -1419,6 +1528,7 @@ if ($user_stmt) {
                                 <option value="pending" <?= $status_filter == 'pending' ? 'selected' : '' ?>>Pending</option>
                                 <option value="confirmed" <?= $status_filter == 'confirmed' ? 'selected' : '' ?>>Confirmed</option>
                                 <option value="cancelled" <?= $status_filter == 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                                <option value="rejected" <?= $status_filter == 'rejected' ? 'selected' : '' ?>>Rejected</option>
                                 <option value="completed" <?= $status_filter == 'completed' ? 'selected' : '' ?>>Completed</option>
                             </select>
                         </div>
@@ -1445,6 +1555,24 @@ if ($user_stmt) {
                             </button>
                         </div>
                     </form>
+                    
+                    <!-- Quick Filters -->
+                    <div class="quick-filters">
+                        <div class="btn-group" role="group">
+                            <a href="?status=pending" class="btn btn-sm btn-outline-warning">
+                                <i class="bi bi-clock me-1"></i> Pending (<?= $booking_stats['pending'] ?? 0 ?>)
+                            </a>
+                            <a href="?status=confirmed" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-check-circle me-1"></i> Confirmed (<?= $booking_stats['confirmed'] ?? 0 ?>)
+                            </a>
+                            <a href="?status=cancelled" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-x-circle me-1"></i> Cancelled (<?= $booking_stats['cancelled'] ?? 0 ?>)
+                            </a>
+                            <a href="?date_from=<?= date('Y-m-d') ?>" class="btn btn-sm btn-outline-info">
+                                <i class="bi bi-calendar-day me-1"></i> Today's
+                            </a>
+                        </div>
+                    </div>
                 </div>
                 
                 <?php if (!empty($bookings)): ?>
@@ -1459,6 +1587,7 @@ if ($user_stmt) {
                             <select class="form-select w-auto" name="bulk_action" style="max-width: 200px;">
                                 <option value="">Bulk Actions</option>
                                 <option value="confirm">Confirm Selected</option>
+                                <option value="reject">Reject Selected</option>
                                 <option value="cancel">Cancel Selected</option>
                                 <option value="delete">Delete Selected</option>
                             </select>
@@ -1556,19 +1685,31 @@ if ($user_stmt) {
                                             </td>
                                             <td>
                                                 <div class="action-buttons">
+                                                    <?php if ($booking['status'] == 'pending'): ?>
+                                                        <button type="button" class="btn btn-sm btn-outline-success" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#confirmModal<?= $booking['id'] ?>">
+                                                            <i class="bi bi-check-lg"></i> Approve
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#rejectModal<?= $booking['id'] ?>">
+                                                            <i class="bi bi-x-lg"></i> Reject
+                                                        </button>
+                                                    <?php endif; ?>
                                                     
-                                                                                    <button type="button" class="btn btn-sm btn-outline-secondary" 
-                                                                                            data-bs-toggle="modal" 
-                                                                                            data-bs-target="#editModal<?= $booking['id'] ?>">
-                                                                                        <i class="bi bi-pencil"></i>
-                                                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" 
+                                                            data-bs-toggle="modal" 
+                                                            data-bs-target="#editModal<?= $booking['id'] ?>">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
                                                     <button type="button" class="btn btn-sm btn-outline-primary" 
                                                             data-bs-toggle="modal" 
                                                             data-bs-target="#viewModal<?= $booking['id'] ?>">
                                                         <i class="bi bi-eye"></i>
                                                     </button>
                                                     
-                                                    <?php if ($booking['status'] != 'confirmed'): ?>
+                                                    <?php if ($booking['status'] != 'confirmed' && $booking['status'] != 'pending'): ?>
                                                         <button type="button" class="btn btn-sm btn-outline-success" 
                                                                 data-bs-toggle="modal" 
                                                                 data-bs-target="#confirmModal<?= $booking['id'] ?>">
@@ -1576,7 +1717,7 @@ if ($user_stmt) {
                                                         </button>
                                                     <?php endif; ?>
                                                     
-                                                    <?php if ($booking['status'] != 'cancelled'): ?>
+                                                    <?php if ($booking['status'] != 'cancelled' && $booking['status'] != 'rejected'): ?>
                                                         <button type="button" class="btn btn-sm btn-outline-warning" 
                                                                 data-bs-toggle="modal" 
                                                                 data-bs-target="#cancelModal<?= $booking['id'] ?>">
@@ -1650,6 +1791,46 @@ if ($user_stmt) {
                                                             </div>
                                                         </div>
                                                         
+                                                        <!-- Student Booking History -->
+                                                        <div class="row">
+                                                            <div class="col-12">
+                                                                <h6><i class="bi bi-clock-history me-2"></i> Student Booking History</h6>
+                                                                <?php
+                                                                $history_stmt = $conn->prepare("
+                                                                    SELECT COUNT(*) as total_bookings,
+                                                                           SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed_bookings,
+                                                                           SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) as cancelled_bookings
+                                                                    FROM bookings 
+                                                                    WHERE user_id = ?
+                                                                ");
+                                                                $history_stmt->bind_param("i", $booking['user_id']);
+                                                                $history_stmt->execute();
+                                                                $history_result = $history_stmt->get_result();
+                                                                $history = $history_result->fetch_assoc();
+                                                                ?>
+                                                                <div class="row">
+                                                                    <div class="col-md-4">
+                                                                        <div class="alert alert-light">
+                                                                            <small>Total Bookings</small>
+                                                                            <h5 class="mb-0"><?= $history['total_bookings'] ?></h5>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-4">
+                                                                        <div class="alert alert-light">
+                                                                            <small>Confirmed</small>
+                                                                            <h5 class="mb-0"><?= $history['confirmed_bookings'] ?></h5>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-4">
+                                                                        <div class="alert alert-light">
+                                                                            <small>Cancelled</small>
+                                                                            <h5 class="mb-0"><?= $history['cancelled_bookings'] ?></h5>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        
                                                         <?php if ($booking['special_notes']): ?>
                                                             <div class="mb-3">
                                                                 <h6><i class="bi bi-sticky me-2"></i> Special Notes</h6>
@@ -1685,6 +1866,31 @@ if ($user_stmt) {
                                                         <div class="modal-footer">
                                                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                                                             <button type="submit" name="update_status" class="btn btn-success">Confirm Booking</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Reject Modal -->
+                                        <div class="modal fade" id="rejectModal<?= $booking['id'] ?>" tabindex="-1">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <form method="POST">
+                                                        <div class="modal-header">
+                                                            <h5 class="modal-title">Reject Booking</h5>
+                                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <p>Are you sure you want to reject this booking request?</p>
+                                                            <p><strong>Student:</strong> <?= htmlspecialchars($booking['student_name']) ?></p>
+                                                            <p><strong>Class:</strong> <?= htmlspecialchars($booking['class_name']) ?></p>
+                                                            <input type="hidden" name="booking_id" value="<?= $booking['id'] ?>">
+                                                            <input type="hidden" name="status" value="rejected">
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                            <button type="submit" name="update_status" class="btn btn-danger">Reject Booking</button>
                                                         </div>
                                                     </form>
                                                 </div>
@@ -1776,6 +1982,7 @@ if ($user_stmt) {
                                                                         <option value="pending" <?= $booking['status'] === 'pending' ? 'selected' : '' ?>>Pending</option>
                                                                         <option value="confirmed" <?= $booking['status'] === 'confirmed' ? 'selected' : '' ?>>Confirmed</option>
                                                                         <option value="cancelled" <?= $booking['status'] === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                                                                        <option value="rejected" <?= $booking['status'] === 'rejected' ? 'selected' : '' ?>>Rejected</option>
                                                                     </select>
                                                                 </div>
                                                                 <div class="col-md-6">
@@ -1851,97 +2058,94 @@ if ($user_stmt) {
         </main>
     </div>
     
-            <!-- Add Booking Modal -->
-            <div class="modal fade" id="addBookingModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Create New Booking</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <form method="POST">
-                            <div class="modal-body">
-                                <div class="row g-3">
-                                    <div class="col-md-6">
-                                        <label class="form-label required">Student</label>
-                                        <select name="user_id" class="form-select" required>
-                                            <option value="">Select Student</option>
-                                            <?php foreach ($students as $stu): ?>
-                                                <option value="<?= $stu['id'] ?>"><?= htmlspecialchars($stu['name']) ?> &lt;<?= htmlspecialchars($stu['email']) ?>&gt;</option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label required">Class</label>
-                                        <select name="class_id" class="form-select" required>
-                                            <option value="">Select Class</option>
-                                            <?php foreach ($available_classes as $cls): ?>
-                                                <option value="<?= $cls['id'] ?>"><?= htmlspecialchars($cls['title']) ?> — <?= date('M j, Y g:i A', strtotime($cls['start_time'])) ?> (<?= $cls['slots_available'] ?> slots)</option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Child Name (optional)</label>
-                                        <input type="text" name="child_name" class="form-control">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Child Age</label>
-                                        <input type="number" name="child_age" class="form-control" min="0">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Child Gender</label>
-                                        <select name="child_gender" class="form-select">
-                                            <option value="">Select</option>
-                                            <option value="male">Male</option>
-                                            <option value="female">Female</option>
-                                            <option value="other">Other</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-12">
-                                        <label class="form-label">Special Notes</label>
-                                        <textarea name="special_notes" class="form-control" rows="3"></textarea>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Booking Status</label>
-                                        <select name="status" class="form-select">
-                                            <option value="pending">Pending</option>
-                                            <option value="confirmed">Confirmed</option>
-                                            <option value="cancelled">Cancelled</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label class="form-label">Payment Status</label>
-                                        <select name="payment_status" class="form-select">
-                                            <option value="pending">Pending</option>
-                                            <option value="paid">Paid</option>
-                                            <option value="failed">Failed</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" name="add_booking" class="btn btn-primary">Create Booking</button>
-                            </div>
-                        </form>
-                    </div>
+    <!-- Add Booking Modal -->
+    <div class="modal fade" id="addBookingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Booking</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label required">Student</label>
+                                <select name="user_id" class="form-select" required>
+                                    <option value="">Select Student</option>
+                                    <?php foreach ($students as $stu): ?>
+                                        <option value="<?= $stu['id'] ?>"><?= htmlspecialchars($stu['name']) ?> &lt;<?= htmlspecialchars($stu['email']) ?>&gt;</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required">Class</label>
+                                <select name="class_id" class="form-select" required>
+                                    <option value="">Select Class</option>
+                                    <?php foreach ($available_classes as $cls): ?>
+                                        <option value="<?= $cls['id'] ?>"><?= htmlspecialchars($cls['title']) ?> — <?= date('M j, Y g:i A', strtotime($cls['start_time'])) ?> (<?= $cls['slots_available'] ?> slots)</option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Child Name (optional)</label>
+                                <input type="text" name="child_name" class="form-control">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Child Age</label>
+                                <input type="number" name="child_age" class="form-control" min="0">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Child Gender</label>
+                                <select name="child_gender" class="form-select">
+                                    <option value="">Select</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Special Notes</label>
+                                <textarea name="special_notes" class="form-control" rows="3"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Booking Status</label>
+                                <select name="status" class="form-select">
+                                    <option value="pending">Pending</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Payment Status</label>
+                                <select name="payment_status" class="form-select">
+                                    <option value="pending">Pending</option>
+                                    <option value="paid">Paid</option>
+                                    <option value="failed">Failed</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="add_booking" class="btn btn-primary">Create Booking</button>
+                    </div>
+                </form>
             </div>
+        </div>
+    </div>
 
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-            <script>
-                // Move modal elements to document.body to avoid issues when modals
-                // are rendered inside tables/forms which can prevent backdrop/close
-                document.addEventListener('DOMContentLoaded', function() {
-                    document.querySelectorAll('.modal').forEach(function(modal) {
-                        if (modal.parentNode !== document.body) {
-                            document.body.appendChild(modal);
-                        }
-                    });
-                });
-            </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Move modal elements to document.body
+            document.querySelectorAll('.modal').forEach(function(modal) {
+                if (modal.parentNode !== document.body) {
+                    document.body.appendChild(modal);
+                }
+            });
+            
             // Select all checkboxes
             const selectAll = document.getElementById('selectAll');
             const selectAllTable = document.getElementById('selectAllTable');
@@ -1989,8 +2193,8 @@ if ($user_stmt) {
                         }
                     }
                     
-                    if (selectedAction === 'confirm' || selectedAction === 'cancel') {
-                        const actionText = selectedAction === 'confirm' ? 'confirm' : 'cancel';
+                    if (selectedAction === 'confirm' || selectedAction === 'cancel' || selectedAction === 'reject') {
+                        const actionText = selectedAction;
                         if (!confirm(`Are you sure you want to ${actionText} ${selectedBookings.length} booking(s)?`)) {
                             e.preventDefault();
                             return false;
