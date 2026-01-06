@@ -1,5 +1,5 @@
 <?php
-// student/register.php - Professional Student Registration Page
+// student/register.php - Simplified Student Registration
 session_start();
 
 // Include database connection and functions
@@ -20,15 +20,6 @@ $form_data = [
     'swimming_level' => 'beginner',
     'password' => '',
     'confirm_password' => ''
-];
-
-// Swimming levels
-$swimming_levels = [
-    'beginner' => 'Beginner (No experience)',
-    'basic' => 'Basic (Can float)',
-    'intermediate' => 'Intermediate (Can swim short distances)',
-    'advanced' => 'Advanced (Comfortable in water)',
-    'competitive' => 'Competitive (Training for competitions)'
 ];
 
 // Check if form is submitted
@@ -119,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $new_id = $conn->insert_id;
                 $ins->close();
 
-                // Log activity (best-effort)
+                // Log activity
                 if (function_exists('logActivity')) {
                     logActivity($conn, $new_id, 'register', 'New student account created');
                 }
@@ -129,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_id'] = $new_id;
                 $_SESSION['role'] = 'student';
                 $_SESSION['user_name'] = $form_data['name'];
-                $_SESSION['last_activity'] = time();
+                $_SESSION['login_time'] = time();
 
                 // Redirect to student dashboard
                 header('Location: index.php');
@@ -144,287 +135,138 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Register | AquaFlow Swimming School</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --secondary: #6c757d;
-            --success: #198754;
-            --danger: #dc3545;
-            --warning: #ffc107;
-            --info: #0dcaf0;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --gray-100: #f8f9fa;
-            --gray-200: #e9ecef;
-            --gray-300: #dee2e6;
-            --gray-400: #ced4da;
-            --gray-500: #adb5bd;
-            --gray-600: #6c757d;
-            --gray-700: #495057;
-            --gray-800: #343a40;
-            --gray-900: #212529;
-            --font-primary: 'Inter', sans-serif;
-            --font-heading: 'Poppins', sans-serif;
-            --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
-            --shadow: 0 4px 12px rgba(0,0,0,0.08);
-            --shadow-lg: 0 10px 30px rgba(0,0,0,0.12);
-            --border-radius: 12px;
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
         body {
-            font-family: var(--font-primary);
-            background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8f9fa;
             display: flex;
             align-items: center;
-            padding: 20px;
-            color: var(--gray-700);
-            line-height: 1.6;
+            min-height: 100vh;
+            color: #333;
         }
 
-        .registration-wrapper {
-            max-width: 1200px;
-            margin: 0 auto;
+        .register-wrapper {
             width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
         }
 
-        .registration-card {
+        .register-container {
             background: white;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-lg);
-            overflow: hidden;
-            display: flex;
-            min-height: 700px;
+            border-radius: 10px;
+            padding: 40px 30px;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
 
-        .left-panel {
-            flex: 1;
-            background: linear-gradient(145deg, #0d6efd 0%, #0a58ca 100%);
-            padding: 60px 40px;
-            color: white;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .left-panel::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="white" opacity="0.05"/></svg>');
+        .logo-area {
+            text-align: center;
+            margin-bottom: 30px;
         }
 
         .logo {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 40px;
+            gap: 10px;
+            text-decoration: none;
+            margin-bottom: 15px;
         }
 
         .logo-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            backdrop-filter: blur(10px);
-        }
-
-        .logo-text h2 {
-            font-family: var(--font-heading);
-            font-weight: 700;
-            margin: 0;
-            font-size: 1.8rem;
-        }
-
-        .logo-text p {
-            opacity: 0.9;
-            font-size: 0.9rem;
-            margin: 0;
-        }
-
-        .feature-list {
-            list-style: none;
-            padding: 0;
-            margin: 40px 0;
-        }
-
-        .feature-list li {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-            font-size: 0.95rem;
-        }
-
-        .feature-list i {
-            background: rgba(255,255,255,0.15);
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
+            background: #0d6efd;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
+            color: white;
+            font-size: 20px;
         }
 
-        .testimonial {
-            background: rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 40px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
+        .logo-text h3 {
+            font-weight: 600;
+            font-size: 20px;
+            margin: 0;
+            color: #212529;
         }
 
-        .testimonial p {
-            font-style: italic;
-            margin-bottom: 10px;
+        .logo-text span {
+            font-size: 12px;
+            color: #6c757d;
         }
 
-        .testimonial-author {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.9rem;
-        }
-
-        .testimonial-author img {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid rgba(255,255,255,0.3);
-        }
-
-        .right-panel {
-            flex: 1.5;
-            padding: 50px 40px;
-            overflow-y: auto;
-        }
-
-        .header-section {
-            margin-bottom: 40px;
-        }
-
-        .header-section h1 {
-            font-family: var(--font-heading);
-            font-weight: 700;
-            color: var(--gray-900);
-            font-size: 2rem;
-            margin-bottom: 8px;
-        }
-
-        .header-section p {
-            color: var(--gray-600);
-            margin-bottom: 0;
-        }
-
-        .step-indicator {
-            display: flex;
-            align-items: center;
-            gap: 20px;
+        .register-header {
+            text-align: center;
             margin-bottom: 30px;
         }
 
-        .step {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--gray-500);
-        }
-
-        .step-number {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--gray-200);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .register-header h2 {
+            font-size: 24px;
             font-weight: 600;
-            font-size: 0.9rem;
+            margin-bottom: 8px;
+            color: #212529;
         }
 
-        .step.active .step-number {
-            background: var(--primary);
-            color: white;
+        .register-header p {
+            color: #6c757d;
+            margin: 0;
+            font-size: 14px;
         }
 
-        .step.active .step-text {
-            color: var(--primary);
-            font-weight: 600;
-        }
-
-        .form-section {
-            margin-bottom: 40px;
-        }
-
-        .form-section h3 {
-            font-family: var(--font-heading);
-            font-weight: 600;
-            font-size: 1.25rem;
-            color: var(--gray-800);
+        .alert-custom {
+            border-radius: 8px;
+            border: none;
+            padding: 15px 20px;
             margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--gray-100);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
         }
 
         .form-label {
             font-weight: 500;
-            color: var(--gray-700);
+            color: #495057;
             margin-bottom: 8px;
-            font-size: 0.95rem;
+            font-size: 14px;
         }
 
         .form-control, .form-select {
-            padding: 12px 16px;
-            border: 2px solid var(--gray-300);
-            border-radius: 8px;
-            font-size: 0.95rem;
-            transition: var(--transition);
+            padding: 12px 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
         }
 
         .form-control:focus, .form-select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
-        }
-
-        .input-group-text {
-            background: var(--gray-100);
-            border: 2px solid var(--gray-300);
-            border-right: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
         }
 
         .password-toggle {
-            cursor: pointer;
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
             background: none;
-            border: 2px solid var(--gray-300);
-            border-left: none;
-            color: var(--gray-600);
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            z-index: 2;
         }
 
-        .password-strength-meter {
+        .password-strength {
             height: 4px;
-            background: var(--gray-200);
+            background: #e9ecef;
             border-radius: 2px;
             margin-top: 8px;
             overflow: hidden;
@@ -433,447 +275,310 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .password-strength-fill {
             height: 100%;
             width: 0%;
-            transition: var(--transition);
+            transition: width 0.3s ease;
             border-radius: 2px;
         }
 
-        .password-requirements {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 8px;
-            margin-top: 12px;
-        }
-
-        .requirement {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.85rem;
-        }
-
-        .requirement i {
-            font-size: 0.75rem;
-        }
-
-        .requirement.valid {
-            color: var(--success);
-        }
-
-        .requirement.invalid {
-            color: var(--gray-500);
-        }
-
         .btn-register {
-            background: linear-gradient(145deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #0d6efd;
             color: white;
-            padding: 14px 32px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 1rem;
+            padding: 12px;
             border: none;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 15px;
             width: 100%;
+            margin: 10px 0;
         }
 
         .btn-register:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow);
-        }
-
-        .btn-register:active {
-            transform: translateY(0);
+            background: #0a58ca;
         }
 
         .terms-box {
-            background: var(--gray-100);
-            border-radius: 8px;
-            padding: 20px;
-            margin: 30px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            border: 1px solid #e9ecef;
         }
 
-        .alert-custom {
-            border-radius: 8px;
-            border: none;
-            padding: 16px 20px;
-            margin-bottom: 24px;
+        .footer-links {
+            text-align: center;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
         }
 
-        .progress-indicator {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 30px;
-            position: relative;
+        .footer-links a {
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 13px;
+            margin: 0 10px;
         }
 
-        .progress-indicator::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 20px;
-            right: 20px;
-            height: 2px;
-            background: var(--gray-200);
-            z-index: 1;
+        .footer-links a:hover {
+            color: #0d6efd;
         }
 
-        .progress-step {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--gray-200);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            color: var(--gray-600);
-            position: relative;
-            z-index: 2;
-            transition: var(--transition);
+        .row {
+            margin-left: -10px;
+            margin-right: -10px;
         }
 
-        .progress-step.active {
-            background: var(--primary);
-            color: white;
-            transform: scale(1.1);
+        .col-md-6 {
+            padding-left: 10px;
+            padding-right: 10px;
         }
 
-        .progress-step.completed {
-            background: var(--success);
-            color: white;
+        .small-text {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
         }
 
-        @media (max-width: 992px) {
-            .registration-card {
-                flex-direction: column;
-                min-height: auto;
+        @media (max-width: 576px) {
+            .register-wrapper {
+                padding: 10px;
             }
             
-            .left-panel {
-                padding: 40px 20px;
-            }
-            
-            .right-panel {
-                padding: 40px 20px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .password-requirements {
-                grid-template-columns: 1fr;
-            }
-            
-            .step-indicator {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 10px;
+            .register-container {
+                padding: 30px 20px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="registration-wrapper">
-        <div class="registration-card">
-            <!-- Left Panel (Branding & Features) -->
-            <div class="left-panel">
-                <div class="logo">
+    <div class="register-wrapper">
+        <div class="register-container">
+            <div class="logo-area">
+                <a href="../" class="logo">
                     <div class="logo-icon">
                         <i class="bi bi-droplet"></i>
                     </div>
                     <div class="logo-text">
-                        <h2>AquaFlow</h2>
-                        <p>Swimming School Excellence</p>
+                        <h3>Elite Swimming</h3>
+                        <span>Student Portal</span>
                     </div>
-                </div>
-                
-                <h3 style="font-family: var(--font-heading); margin-bottom: 20px;">Join Our Swimming Community</h3>
-                <p style="opacity: 0.9; margin-bottom: 30px;">Become part of a premier swimming school that has trained over 5,000 students since 2010.</p>
-                
-                <ul class="feature-list">
-                    <li>
-                        <i class="bi bi-shield-check"></i>
-                        <span>Certified Professional Instructors</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-calendar-check"></i>
-                        <span>Flexible Class Scheduling</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-graph-up"></i>
-                        <span>Progress Tracking Dashboard</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-award"></i>
-                        <span>Certification & Achievement Badges</span>
-                    </li>
-                    <li>
-                        <i class="bi bi-chat-heart"></i>
-                        <span>Personalized Coaching Approach</span>
-                    </li>
-                </ul>
-                
-                <div class="testimonial">
-                    <p>"AquaFlow transformed my daughter's fear of water into a passion for swimming. The instructors are amazing!"</p>
-                    <div class="testimonial-author">
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(45deg, #ff9a9e, #fad0c4); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">S</div>
-                        <div>
-                            <strong>Sarah Johnson</strong>
-                            <div style="opacity: 0.8; font-size: 0.85rem;">Parent of Student</div>
-                        </div>
-                    </div>
-                </div>
+                </a>
             </div>
-            
-            <!-- Right Panel (Registration Form) -->
-            <div class="right-panel">
-                <div class="header-section">
-                    <h1>Create Your Account</h1>
-                    <p>Start your swimming journey with us. Fill in your details below.</p>
+
+            <div class="register-header">
+                <h2>Create Account</h2>
+                <p>Fill in your details to get started</p>
+            </div>
+
+            <?php if(isset($errors['general'])): ?>
+                <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <?php echo htmlspecialchars($errors['general']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-                
-                <!-- Progress Indicator -->
-                <div class="progress-indicator">
-                    <div class="progress-step active">1</div>
-                    <div class="progress-step">2</div>
-                    <div class="progress-step">3</div>
-                    <div class="progress-step">4</div>
+            <?php endif; ?>
+
+            <form method="post" id="registrationForm" novalidate>
+                <!-- Personal Information -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="name" class="form-label">Full Name *</label>
+                            <input type="text" 
+                                   class="form-control <?php echo isset($errors['name']) ? 'is-invalid' : ''; ?>" 
+                                   name="name" 
+                                   id="name" 
+                                   value="<?php echo htmlspecialchars($form_data['name']); ?>" 
+                                   placeholder="John Smith"
+                                   required>
+                            <?php if(isset($errors['name'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['name']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="email" class="form-label">Email Address *</label>
+                            <input type="email" 
+                                   class="form-control <?php echo isset($errors['email']) ? 'is-invalid' : ''; ?>" 
+                                   name="email" 
+                                   id="email" 
+                                   value="<?php echo htmlspecialchars($form_data['email']); ?>" 
+                                   placeholder="john@example.com"
+                                   required>
+                            <?php if(isset($errors['email'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['email']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
-                
-                <?php if($success): ?>
-                    <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-check-circle-fill fs-4 me-3"></i>
-                            <div>
-                                <h5 class="alert-heading mb-1">Registration Successful!</h5>
-                                <?php echo $success_message; ?>
-                            </div>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                <?php endif; ?>
-                
-                <?php if(isset($errors['general'])): ?>
-                    <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-                            <div><?php echo htmlspecialchars($errors['general']); ?></div>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                <?php endif; ?>
-                
-                <form method="post" id="registrationForm" novalidate>
-                    <!-- Personal Information -->
-                    <div class="form-section">
-                        <h3><i class="bi bi-person-circle me-2"></i>Personal Information</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Full Name <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                    <input type="text" class="form-control <?php echo isset($errors['name']) ? 'is-invalid' : ''; ?>" 
-                                           name="name" id="name" value="<?php echo htmlspecialchars($form_data['name']); ?>" 
-                                           placeholder="John Smith" required>
-                                </div>
-                                <?php if(isset($errors['name'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['name']); ?></div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Email Address <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                                    <input type="email" class="form-control <?php echo isset($errors['email']) ? 'is-invalid' : ''; ?>" 
-                                           name="email" id="email" value="<?php echo htmlspecialchars($form_data['email']); ?>" 
-                                           placeholder="john@example.com" required>
-                                </div>
-                                <?php if(isset($errors['email'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['email']); ?></div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Phone Number</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-telephone"></i></span>
-                                    <input type="tel" class="form-control <?php echo isset($errors['phone']) ? 'is-invalid' : ''; ?>" 
-                                           name="phone" id="phone" value="<?php echo htmlspecialchars($form_data['phone']); ?>" 
-                                           placeholder="(123) 456-7890">
-                                </div>
-                                <?php if(isset($errors['phone'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['phone']); ?></div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Date of Birth <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
-                                    <input type="date" class="form-control <?php echo isset($errors['dob']) ? 'is-invalid' : ''; ?>" 
-                                           name="dob" id="dob" value="<?php echo htmlspecialchars($form_data['dob']); ?>" required>
-                                </div>
-                                <small class="text-muted">Must be at least 3 years old</small>
-                                <?php if(isset($errors['dob'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['dob']); ?></div>
-                                <?php endif; ?>
-                            </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="dob" class="form-label">Date of Birth *</label>
+                            <input type="date" 
+                                   class="form-control <?php echo isset($errors['dob']) ? 'is-invalid' : ''; ?>" 
+                                   name="dob" 
+                                   id="dob" 
+                                   value="<?php echo htmlspecialchars($form_data['dob']); ?>"
+                                   required>
+                            <div class="small-text">Must be at least 3 years old</div>
+                            <?php if(isset($errors['dob'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['dob']); ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     
-                    <!-- Emergency Contact -->
-                    <div class="form-section">
-                        <h3><i class="bi bi-telephone-outbound me-2"></i>Emergency Contact</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Contact Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control <?php echo isset($errors['emergency_contact']) ? 'is-invalid' : ''; ?>" 
-                                       name="emergency_contact" id="emergency_contact" 
-                                       value="<?php echo htmlspecialchars($form_data['emergency_contact']); ?>" 
-                                       placeholder="Emergency contact full name" required>
-                                <?php if(isset($errors['emergency_contact'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['emergency_contact']); ?></div>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Contact Phone <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-telephone-fill"></i></span>
-                                    <input type="tel" class="form-control <?php echo isset($errors['emergency_phone']) ? 'is-invalid' : ''; ?>" 
-                                           name="emergency_phone" id="emergency_phone" 
-                                           value="<?php echo htmlspecialchars($form_data['emergency_phone']); ?>" 
-                                           placeholder="(123) 456-7890" required>
-                                </div>
-                                <?php if(isset($errors['emergency_phone'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['emergency_phone']); ?></div>
-                                <?php endif; ?>
-                            </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="phone" class="form-label">Phone Number</label>
+                            <input type="tel" 
+                                   class="form-control" 
+                                   name="phone" 
+                                   id="phone" 
+                                   value="<?php echo htmlspecialchars($form_data['phone']); ?>" 
+                                   placeholder="(123) 456-7890">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Emergency Contact -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="emergency_contact" class="form-label">Emergency Contact *</label>
+                            <input type="text" 
+                                   class="form-control <?php echo isset($errors['emergency_contact']) ? 'is-invalid' : ''; ?>" 
+                                   name="emergency_contact" 
+                                   id="emergency_contact" 
+                                   value="<?php echo htmlspecialchars($form_data['emergency_contact']); ?>" 
+                                   placeholder="Contact name"
+                                   required>
+                            <?php if(isset($errors['emergency_contact'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['emergency_contact']); ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     
-                    <!-- Swimming Information -->
-                    <div class="form-section">
-                        <h3><i class="bi bi-water me-2"></i>Swimming Information</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Swimming Level <span class="text-danger">*</span></label>
-                                <select class="form-select" name="swimming_level" id="swimming_level" required>
-                                    <?php foreach($swimming_levels as $value => $label): ?>
-                                        <option value="<?php echo $value; ?>" <?php echo $form_data['swimming_level'] == $value ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($label); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="emergency_phone" class="form-label">Emergency Phone *</label>
+                            <input type="tel" 
+                                   class="form-control <?php echo isset($errors['emergency_phone']) ? 'is-invalid' : ''; ?>" 
+                                   name="emergency_phone" 
+                                   id="emergency_phone" 
+                                   value="<?php echo htmlspecialchars($form_data['emergency_phone']); ?>" 
+                                   placeholder="(123) 456-7890"
+                                   required>
+                            <?php if(isset($errors['emergency_phone'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['emergency_phone']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Swimming Information -->
+                <div class="form-group">
+                    <label for="swimming_level" class="form-label">Swimming Level</label>
+                    <select class="form-select" name="swimming_level" id="swimming_level">
+                        <option value="beginner" <?php echo $form_data['swimming_level'] == 'beginner' ? 'selected' : ''; ?>>Beginner (No experience)</option>
+                        <option value="basic" <?php echo $form_data['swimming_level'] == 'basic' ? 'selected' : ''; ?>>Basic (Can float)</option>
+                        <option value="intermediate" <?php echo $form_data['swimming_level'] == 'intermediate' ? 'selected' : ''; ?>>Intermediate (Can swim short distances)</option>
+                        <option value="advanced" <?php echo $form_data['swimming_level'] == 'advanced' ? 'selected' : ''; ?>>Advanced (Comfortable in water)</option>
+                        <option value="competitive" <?php echo $form_data['swimming_level'] == 'competitive' ? 'selected' : ''; ?>>Competitive (Training for competitions)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="medical_notes" class="form-label">Medical Notes</label>
+                    <textarea class="form-control" 
+                              name="medical_notes" 
+                              id="medical_notes" 
+                              rows="2" 
+                              placeholder="Any medical conditions, allergies, or special requirements..."><?php echo htmlspecialchars($form_data['medical_notes']); ?></textarea>
+                    <div class="small-text">Optional - for your safety</div>
+                </div>
+
+                <!-- Account Security -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="password" class="form-label">Password *</label>
+                            <div style="position: relative;">
+                                <input type="password" 
+                                       class="form-control <?php echo isset($errors['password']) ? 'is-invalid' : ''; ?>" 
+                                       name="password" 
+                                       id="password" 
+                                       placeholder="At least 8 characters"
+                                       required>
+                                <button type="button" class="password-toggle" id="togglePassword">
+                                    <i class="bi bi-eye"></i>
+                                </button>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Medical Notes</label>
-                                <textarea class="form-control" name="medical_notes" id="medical_notes" 
-                                          rows="2" placeholder="Any medical conditions, allergies, or special requirements..."><?php echo htmlspecialchars($form_data['medical_notes']); ?></textarea>
-                                <small class="text-muted">Please disclose any relevant health information for your safety</small>
+                            <div class="password-strength">
+                                <div class="password-strength-fill" id="passwordStrengthFill"></div>
                             </div>
+                            <?php if(isset($errors['password'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['password']); ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
                     
-                    <!-- Account Security -->
-                    <div class="form-section">
-                        <h3><i class="bi bi-shield-lock me-2"></i>Account Security</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Password <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="password" class="form-control <?php echo isset($errors['password']) ? 'is-invalid' : ''; ?>" 
-                                           name="password" id="password" placeholder="Create a strong password" required>
-                                    <button class="btn password-toggle" type="button" id="togglePassword">
-                                        <i class="bi bi-eye"></i>
-                                    </button>
-                                </div>
-                                <div class="password-strength-meter">
-                                    <div class="password-strength-fill" id="passwordStrengthFill"></div>
-                                </div>
-                                <div class="password-requirements" id="passwordRequirements">
-                                    <div class="requirement invalid" id="reqLength">
-                                        <i class="bi bi-circle"></i>
-                                        <span>8+ characters</span>
-                                    </div>
-                                    <div class="requirement invalid" id="reqUpper">
-                                        <i class="bi bi-circle"></i>
-                                        <span>Uppercase letter</span>
-                                    </div>
-                                    <div class="requirement invalid" id="reqLower">
-                                        <i class="bi bi-circle"></i>
-                                        <span>Lowercase letter</span>
-                                    </div>
-                                    <div class="requirement invalid" id="reqNumber">
-                                        <i class="bi bi-circle"></i>
-                                        <span>Number</span>
-                                    </div>
-                                </div>
-                                <?php if(isset($errors['password'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['password']); ?></div>
-                                <?php endif; ?>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="confirm_password" class="form-label">Confirm Password *</label>
+                            <div style="position: relative;">
+                                <input type="password" 
+                                       class="form-control <?php echo isset($errors['confirm_password']) ? 'is-invalid' : ''; ?>" 
+                                       name="confirm_password" 
+                                       id="confirm_password" 
+                                       placeholder="Confirm your password"
+                                       required>
+                                <button type="button" class="password-toggle" id="toggleConfirmPassword">
+                                    <i class="bi bi-eye"></i>
+                                </button>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label class="form-label">Confirm Password <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="password" class="form-control <?php echo isset($errors['confirm_password']) ? 'is-invalid' : ''; ?>" 
-                                           name="confirm_password" id="confirm_password" placeholder="Confirm your password" required>
-                                    <button class="btn password-toggle" type="button" id="toggleConfirmPassword">
-                                        <i class="bi bi-eye"></i>
-                                    </button>
-                                </div>
-                                <div class="mt-2">
-                                    <div class="requirement invalid" id="reqMatch">
-                                        <i class="bi bi-circle"></i>
-                                        <span>Passwords match</span>
-                                    </div>
-                                </div>
-                                <?php if(isset($errors['confirm_password'])): ?>
-                                    <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['confirm_password']); ?></div>
-                                <?php endif; ?>
-                            </div>
+                            <?php if(isset($errors['confirm_password'])): ?>
+                                <div class="invalid-feedback d-block"><?php echo htmlspecialchars($errors['confirm_password']); ?></div>
+                            <?php endif; ?>
                         </div>
                     </div>
-                    
-                    <!-- Terms & Conditions -->
-                    <div class="terms-box">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="terms" id="terms" required>
-                            <label class="form-check-label" for="terms">
-                                I agree to the <a href="#" class="text-decoration-none">Terms of Service</a>, 
-                                <a href="#" class="text-decoration-none">Privacy Policy</a>, and understand that 
-                                AquaFlow may contact me regarding my account and swimming progress.
-                            </label>
-                        </div>
+                </div>
+
+                <!-- Terms & Conditions -->
+                <div class="terms-box">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="terms" id="terms" required>
+                        <label class="form-check-label" for="terms">
+                            I agree to the <a href="#" class="text-decoration-none">Terms of Service</a> and 
+                            <a href="#" class="text-decoration-none">Privacy Policy</a>
+                        </label>
                     </div>
-                    
-                    <!-- Submit Button -->
-                    <button type="submit" class="btn-register">
-                        <i class="bi bi-person-plus"></i>
-                        Create My Account
-                    </button>
-                    
-                    <div class="text-center mt-4">
-                        <p class="text-muted">
-                            Already have an account? 
-                            <a href="login.php" class="text-decoration-none fw-semibold">Sign In Here</a>
-                        </p>
-                    </div>
-                </form>
+                </div>
+
+                <button type="submit" class="btn-register">
+                    Create Account
+                </button>
+
+                <div class="text-center mt-3">
+                    <p class="text-muted mb-0">
+                        Already have an account? 
+                        <a href="login.php" class="text-decoration-none">Sign In</a>
+                    </p>
+                </div>
+            </form>
+
+            <div class="footer-links">
+                <a href="../">Home</a>
+                <a href="contact.php">Contact</a>
             </div>
         </div>
     </div>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Password toggle functionality
+            // Password toggle functionality (matches login page)
             const togglePassword = document.getElementById('togglePassword');
             const toggleConfirmPassword = document.getElementById('toggleConfirmPassword');
             const passwordInput = document.getElementById('password');
@@ -882,42 +587,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             togglePassword.addEventListener('click', function() {
                 const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 passwordInput.setAttribute('type', type);
-                this.innerHTML = type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+                this.innerHTML = type === 'password' ? 
+                    '<i class="bi bi-eye"></i>' : 
+                    '<i class="bi bi-eye-slash"></i>';
             });
             
             toggleConfirmPassword.addEventListener('click', function() {
                 const type = confirmInput.getAttribute('type') === 'password' ? 'text' : 'password';
                 confirmInput.setAttribute('type', type);
-                this.innerHTML = type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+                this.innerHTML = type === 'password' ? 
+                    '<i class="bi bi-eye"></i>' : 
+                    '<i class="bi bi-eye-slash"></i>';
             });
             
-            // Password strength checker
+            // Password strength indicator (simplified)
             passwordInput.addEventListener('input', function() {
                 const password = passwordInput.value;
-                
-                // Requirements
-                const hasLength = password.length >= 8;
-                const hasUpper = /[A-Z]/.test(password);
-                const hasLower = /[a-z]/.test(password);
-                const hasNumber = /[0-9]/.test(password);
-                
-                // Update requirement indicators
-                updateRequirement('reqLength', hasLength);
-                updateRequirement('reqUpper', hasUpper);
-                updateRequirement('reqLower', hasLower);
-                updateRequirement('reqNumber', hasNumber);
-                
-                // Calculate and update strength meter
                 let strength = 0;
-                if (hasLength) strength += 25;
-                if (hasUpper) strength += 25;
-                if (hasLower) strength += 25;
-                if (hasNumber) strength += 25;
+                
+                if (password.length >= 8) strength += 50;
+                if (/[A-Z]/.test(password)) strength += 25;
+                if (/[0-9]/.test(password)) strength += 25;
                 
                 const strengthFill = document.getElementById('passwordStrengthFill');
                 strengthFill.style.width = strength + '%';
                 
-                // Update color based on strength
+                // Update color
                 if (strength < 50) {
                     strengthFill.style.backgroundColor = '#dc3545';
                 } else if (strength < 75) {
@@ -927,11 +622,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             });
             
-            // Password match checker
-            confirmInput.addEventListener('input', function() {
-                const match = passwordInput.value === confirmInput.value && passwordInput.value !== '';
-                updateRequirement('reqMatch', match);
-            });
+            // Auto-focus name field
+            const nameInput = document.getElementById('name');
+            if (nameInput) {
+                nameInput.focus();
+            }
             
             // Phone number formatting
             const phoneInputs = document.querySelectorAll('input[type="tel"]');
@@ -946,103 +641,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     e.target.value = value;
                 });
             });
-            
-            // Progress indicator animation
-            const formSections = document.querySelectorAll('.form-section');
-            const progressSteps = document.querySelectorAll('.progress-step');
-            
-            function updateProgress() {
-                let currentStep = 0;
-                formSections.forEach((section, index) => {
-                    const inputs = section.querySelectorAll('input, select, textarea');
-                    let allFilled = true;
-                    
-                    inputs.forEach(input => {
-                        if (input.required && !input.value.trim()) {
-                            allFilled = false;
-                        }
-                    });
-                    
-                    if (allFilled) {
-                        currentStep = index + 1;
-                    }
-                });
-                
-                progressSteps.forEach((step, index) => {
-                    step.classList.remove('active', 'completed');
-                    if (index < currentStep) {
-                        step.classList.add('completed');
-                    } else if (index === currentStep) {
-                        step.classList.add('active');
-                    }
-                });
-            }
-            
-            // Listen to all form inputs for progress updates
-            document.querySelectorAll('input, select, textarea').forEach(input => {
-                input.addEventListener('input', updateProgress);
-                input.addEventListener('change', updateProgress);
-            });
-            
-            // Initialize progress
-            updateProgress();
-            
-            // Form submission enhancement
-            const form = document.getElementById('registrationForm');
-            form.addEventListener('submit', function(e) {
-                const terms = document.getElementById('terms');
-                if (!terms.checked) {
-                    e.preventDefault();
-                    terms.focus();
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-warning alert-custom alert-dismissible fade show mt-3';
-                    alertDiv.innerHTML = `
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-                            <div>Please agree to the terms and conditions to continue.</div>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    `;
-                    form.insertBefore(alertDiv, form.querySelector('.terms-box'));
-                    
-                    // Animate the terms box for attention
-                    const termsBox = document.querySelector('.terms-box');
-                    termsBox.style.animation = 'none';
-                    setTimeout(() => {
-                        termsBox.style.animation = 'pulse 0.5s';
-                    }, 10);
-                }
-            });
-            
-            // Helper function
-            function updateRequirement(elementId, met) {
-                const element = document.getElementById(elementId);
-                const icon = element.querySelector('i');
-                
-                if (met) {
-                    element.classList.remove('invalid');
-                    element.classList.add('valid');
-                    icon.className = 'bi bi-check-circle-fill';
-                } else {
-                    element.classList.remove('valid');
-                    element.classList.add('invalid');
-                    icon.className = 'bi bi-circle';
-                }
-            }
-            
-            // Add CSS animation for pulse effect
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes pulse {
-                    0% { transform: scale(1); }
-                    50% { transform: scale(1.02); box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1); }
-                    100% { transform: scale(1); }
-                }
-                .terms-box {
-                    transition: all 0.3s ease;
-                }
-            `;
-            document.head.appendChild(style);
         });
     </script>
 </body>

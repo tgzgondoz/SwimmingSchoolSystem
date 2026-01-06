@@ -1,4 +1,4 @@
- <?php
+<?php
 // index.php - Professional Public Landing Page (Fixed)
 session_start();
 include __DIR__ . '/inc/db.php';
@@ -68,26 +68,23 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         :root {
             --primary: #0d6efd;
             --primary-dark: #0a58ca;
-            --primary-light: #dbeafe;
             --secondary: #6c757d;
-            --accent: #8b5cf6;
-            --accent-dark: #7c3aed;
-            --success: #10b981;
-            --success-dark: #059669;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #06b6d4;
+            --accent: #495057;
+            --success: #198754;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --info: #0dcaf0;
             --light: #f8f9fa;
-            --dark: #1e293b;
-            --gray-100: #f3f4f6;
-            --gray-200: #e5e7eb;
-            --gray-300: #d1d5db;
-            --gray-400: #9ca3af;
-            --gray-500: #6b7280;
-            --gray-600: #4b5563;
-            --gray-700: #374151;
-            --gray-800: #1f2937;
-            --gray-900: #111827;
+            --dark: #212529;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-400: #ced4da;
+            --gray-500: #adb5bd;
+            --gray-600: #6c757d;
+            --gray-700: #495057;
+            --gray-800: #343a40;
+            --gray-900: #212529;
         }
 
         * {
@@ -105,318 +102,131 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 
         h1, h2, h3, h4, h5, h6 {
             font-family: 'Poppins', sans-serif;
-            font-weight: 700;
+            font-weight: 600;
             line-height: 1.2;
             margin-bottom: 1rem;
         }
 
-        .text-gradient {
-            background: linear-gradient(90deg, var(--primary), var(--accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        /* Navigation */
+        .navbar {
+            padding: 1rem 0;
+            background: white;
+            border-bottom: 1px solid var(--gray-200);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
 
-      /* Navigation */
-.navbar {
-    padding: 1rem 0;
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1030;
-    transition: all 0.3s ease;
-}
+        .navbar.scrolled {
+            padding: 0.75rem 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
 
-.navbar.scrolled {
-    padding: 0.75rem 0;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
+        .navbar-brand {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--primary) !important;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
 
-.navbar-brand {
-    font-family: 'Poppins', sans-serif;
-    font-weight: 800;
-    font-size: 1.5rem; /* Reduced from 1.75rem */
-    color: var(--primary) !important;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem; /* Reduced from 0.75rem */
-    text-decoration: none;
-    max-width: 50%; /* Limit brand width */
-    flex-shrink: 1; /* Allow shrinking */
-    overflow: hidden;
-}
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+        }
 
-.brand-icon {
-    width: 40px; /* Reduced from 44px */
-    height: 40px; /* Reduced from 44px */
-    background: linear-gradient(135deg, var(--primary), var(--accent));
-    border-radius: 10px; /* Reduced from 12px */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.25rem; /* Reduced from 1.5rem */
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
-    flex-shrink: 0; /* Don't shrink icon */
-}
+        .nav-link {
+            font-weight: 500;
+            color: var(--gray-700) !important;
+            padding: 0.625rem 0.875rem !important;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            font-size: 0.95rem;
+            text-decoration: none;
+        }
 
-.navbar-brand span {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    /*max-width: calc(100% - 60px); /* Limit text width */
-}
+        .nav-link:hover {
+            color: var(--primary) !important;
+            background: var(--gray-100);
+        }
 
-.navbar-nav {
-    align-items: center;
-    gap: 0.25rem; /* Reduced gap */
-    flex-wrap: nowrap;
-    min-width: 0; /* Allow shrinking */
-}
+        .nav-link.active {
+            color: var(--primary) !important;
+            font-weight: 600;
+        }
 
-.nav-link {
-    font-weight: 600;
-    color: var(--gray-700) !important;
-    padding: 0.625rem 0.875rem !important; /* Reduced padding */
-    border-radius: 8px;
-    transition: all 0.3s ease;
-    font-size: 0.95rem; /* Slightly smaller font */
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
+        /* Buttons */
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.875rem 1.75rem;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
 
-.nav-link:hover {
-    color: var(--primary) !important;
-    background: var(--primary-light);
-}
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+        }
 
-.nav-link.active {
-    color: white !important;
-    background: linear-gradient(90deg, var(--primary), var(--primary-dark));
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
-}
+        .btn-secondary {
+            background: white;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            padding: 0.875rem 1.75rem;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
 
-/* Button styling within navbar */
-.navbar .btn {
-    border-radius: 8px;
-    padding: 0.625rem 1.25rem; /* Reduced padding */
-    font-weight: 600;
-    font-size: 0.95rem; /* Slightly smaller */
-    min-height: 44px; /* Reduced from 48px */
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.375rem; /* Reduced gap */
-    white-space: nowrap;
-    text-decoration: none;
-    border: none;
-    transition: all 0.3s ease;
-    flex-shrink: 0;
-}
+        .btn-secondary:hover {
+            background: var(--primary);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+        }
 
-.navbar .btn-primary {
-    background: linear-gradient(90deg, var(--primary), var(--primary-dark));
-    color: white;
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
-}
+        .btn-accent {
+            background: var(--gray-800);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.875rem 1.75rem;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
 
-.navbar .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(13, 110, 253, 0.3);
-}
-
-.navbar .btn-secondary {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--primary);
-    border: 2px solid var(--primary);
-}
-
-.navbar .btn-secondary:hover {
-    background: var(--primary);
-    color: white;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(13, 110, 253, 0.2);
-}
-
-/* Adjust spacing for nav items with buttons */
-.navbar-nav .nav-item.ms-2 {
-    margin-left: 0.5rem !important; /* Reduced from 0.75rem */
-}
-
-/* Optimize for smaller desktop screens */
-@media (max-width: 1199px) {
-    .navbar-brand {
-        font-size: 1.35rem;
-        max-width: 45%;
-    }
-    
-    .brand-icon {
-        width: 36px;
-        height: 36px;
-        font-size: 1.1rem;
-    }
-    
-    .nav-link {
-        padding: 0.5rem 0.75rem !important;
-        font-size: 0.9rem;
-    }
-    
-    .navbar .btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-        min-height: 40px;
-    }
-    
-    .navbar-nav .nav-item.ms-2 {
-        margin-left: 0.375rem !important;
-    }
-}
-
-/* Mobile menu styling */
-@media (max-width: 991px) {
-    .navbar-collapse {
-        padding-top: 1rem;
-    }
-    
-    .navbar-nav {
-        gap: 0.5rem;
-        width: 100%;
-    }
-    
-    .nav-item {
-        width: 100%;
-    }
-    
-    .nav-link {
-        padding: 0.875rem !important;
-        justify-content: center;
-        text-align: center;
-        font-size: 1rem;
-    }
-    
-    .navbar-nav .nav-item.ms-2 {
-        margin-left: 0 !important;
-        margin-top: 0.5rem;
-    }
-    
-    .navbar .btn {
-        width: 100%;
-        justify-content: center;
-        padding: 0.875rem 1.5rem;
-        font-size: 1rem;
-        min-height: 48px;
-    }
-    
-    .navbar-toggler {
-        border: none;
-        padding: 0.5rem;
-        font-size: 1.25rem;
-        box-shadow: none;
-    }
-    
-    .navbar-toggler:focus {
-        box-shadow: none;
-        outline: none;
-    }
-    
-    .navbar-brand {
-        max-width: 70%; /* More space on mobile */
-        font-size: 1.4rem;
-    }
-}
-
-/* Extra small screens */
-@media (max-width: 576px) {
-    .navbar-brand {
-        font-size: 1.25rem;
-        max-width: 60%;
-    }
-    
-    .brand-icon {
-        width: 34px;
-        height: 34px;
-        font-size: 1rem;
-    }
-}
-
-/* Ensure navbar container uses available space efficiently */
-.navbar > .container {
-    padding-right: 12px;
-    padding-left: 12px;
-}
-
-/* Compress navbar on very small screens */
-@media (max-width: 360px) {
-    .navbar-brand {
-        font-size: 1.1rem;
-    }
-    
-    .brand-icon {
-        width: 32px;
-        height: 32px;
-        font-size: 0.9rem;
-    }
-    
-    .navbar-brand span {
-        display: none; /* Hide full name on very small screens */
-    }
-    
-    .navbar-brand::after {
-        content: "AFSS";
-        font-size: 1.1rem;
-        font-weight: 800;
-        color: var(--primary);
-    }
-}
-
-/* Prevent navbar items from wrapping on desktop */
-@media (min-width: 992px) {
-    .navbar-collapse {
-        flex-grow: 0; /* Don't take extra space */
-        min-width: 0; /* Allow shrinking */
-    }
-    
-    .navbar-nav {
-        justify-content: flex-end;
-        flex-wrap: nowrap;
-    }
-    
-    /* Compact layout for nav items */
-    .nav-item:not(.ms-2) {
-        margin-right: 0.125rem;
-    }
-}
-
-/* Hide text on buttons when space is tight */
-@media (max-width: 1100px) and (min-width: 992px) {
-    .navbar .btn .btn-text {
-        display: none;
-    }
-    
-    .navbar .btn {
-        padding: 0.625rem;
-        min-width: 44px;
-    }
-    
-    .navbar .btn i {
-        margin: 0;
-    }
-}
-/* Hover effect for active state */
-.nav-link.active:hover {
-    background: linear-gradient(90deg, var(--primary-dark), var(--primary));
-    transform: translateY(-2px);
-}
+        .btn-accent:hover {
+            background: var(--dark);
+            color: white;
+            transform: translateY(-2px);
+        }
 
         /* Hero Section */
         .hero-section {
-            min-height: 100vh;
-            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+            min-height: 90vh;
+            background: var(--primary);
             padding-top: 80px;
             position: relative;
             overflow: hidden;
@@ -425,40 +235,22 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             color: white;
         }
 
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" opacity="0.1"><path d="M0,0L48,32C96,64,192,128,288,149.3C384,171,480,149,576,138.7C672,128,768,128,864,138.7C960,149,1056,171,1152,181.3C1248,192,1344,192,1392,192L1440,192L1440,800L1392,800C1344,800,1248,800,1152,800C1056,800,960,800,864,800C768,800,672,800,576,800C480,800,384,800,288,800C192,800,96,800,48,800L0,800Z" fill="white"/></svg>');
-            background-size: cover;
-            background-position: center;
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 2;
-            padding: 4rem 0;
-        }
-
         .hero-title {
-            font-size: 3.5rem;
-            font-weight: 800;
+            font-size: 3rem;
+            font-weight: 700;
             line-height: 1.1;
             margin-bottom: 1.5rem;
         }
 
         @media (max-width: 768px) {
             .hero-title {
-                font-size: 2.5rem;
+                font-size: 2.25rem;
             }
         }
 
         .hero-subtitle {
-            font-size: 1.25rem;
-            opacity: 0.9;
+            font-size: 1.125rem;
+            opacity: 0.95;
             margin-bottom: 2rem;
             max-width: 600px;
         }
@@ -475,81 +267,21 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         }
 
         .stat-number {
-            font-size: 2.5rem;
-            font-weight: 800;
+            font-size: 2rem;
+            font-weight: 700;
             margin-bottom: 0.25rem;
         }
 
         .stat-label {
             font-size: 0.875rem;
-            opacity: 0.8;
+            opacity: 0.9;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
 
-        /* Buttons */
-        .btn-primary {
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 1rem 2rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(13, 110, 253, 0.3);
-            color: white;
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 10px;
-            padding: 1rem 2rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            backdrop-filter: blur(10px);
-        }
-
-        .btn-secondary:hover {
-            background: white;
-            color: var(--primary);
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.2);
-        }
-
-        .btn-accent {
-            background: linear-gradient(90deg, var(--accent), var(--accent-dark));
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 1rem 2rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-
-        .btn-accent:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
-            color: white;
-        }
-
         /* Sections */
         section {
-            padding: 5rem 0;
+            padding: 4rem 0;
         }
 
         .section-title {
@@ -558,8 +290,9 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         }
 
         .section-title h2 {
-            font-size: 2.5rem;
+            font-size: 2.25rem;
             margin-bottom: 1rem;
+            color: var(--dark);
         }
 
         .section-title .subtitle {
@@ -572,8 +305,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         /* Features */
         .feature-card {
             background: white;
-            border-radius: 15px;
-            padding: 2.5rem;
+            border-radius: 12px;
+            padding: 2rem;
             height: 100%;
             transition: all 0.3s ease;
             border: 1px solid var(--gray-200);
@@ -581,58 +314,51 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             overflow: hidden;
         }
 
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--accent));
-        }
-
         .feature-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            transform: translateY(-8px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+            border-color: var(--primary);
         }
 
         .feature-icon {
-            width: 70px;
-            height: 70px;
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            border-radius: 15px;
+            width: 60px;
+            height: 60px;
+            background: var(--primary);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 1.75rem;
+            font-size: 1.5rem;
             margin-bottom: 1.5rem;
         }
 
         .feature-card h4 {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             margin-bottom: 1rem;
+            color: var(--dark);
         }
 
         /* Class Cards */
         .class-card {
             background: white;
-            border-radius: 15px;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
             transition: all 0.3s ease;
             height: 100%;
             border: 1px solid var(--gray-200);
         }
 
         .class-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            transform: translateY(-8px);
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+            border-color: var(--primary);
         }
 
         .class-header {
-            height: 200px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 180px;
+            background: var(--gray-800);
             position: relative;
             overflow: hidden;
         }
@@ -641,22 +367,22 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             position: absolute;
             top: 1rem;
             right: 1rem;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
+            background: var(--primary);
             color: white;
-            padding: 0.5rem 1rem;
+            padding: 0.375rem 0.875rem;
             border-radius: 20px;
             font-size: 0.75rem;
             font-weight: 600;
         }
 
         .class-body {
-            padding: 2rem;
+            padding: 1.75rem;
         }
 
         .class-title {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             margin-bottom: 0.75rem;
+            color: var(--dark);
         }
 
         .class-meta {
@@ -673,8 +399,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         }
 
         .class-price {
-            font-size: 1.75rem;
-            font-weight: 700;
+            font-size: 1.5rem;
+            font-weight: 600;
             color: var(--primary);
             margin-bottom: 1.5rem;
         }
@@ -685,25 +411,22 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             font-weight: 500;
         }
 
-        
-    
-
         /* Footer */
         footer {
             background: var(--gray-900);
             color: white;
-            padding: 5rem 0 2rem;
+            padding: 4rem 0 2rem;
         }
 
         .school-description {
-    color: var(--gray-400);
-    font-size: 0.875rem;
-    line-height: 1.7;
-    margin-bottom: 1.5rem;
-}
+            color: var(--gray-400);
+            font-size: 0.875rem;
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
 
         .footer-section {
-            margin-bottom: 3rem;
+            margin-bottom: 2.5rem;
         }
 
         .footer-section h5 {
@@ -745,13 +468,13 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 
         .social-links {
             display: flex;
-            gap: 0.875rem;
+            gap: 0.75rem;
             margin-top: 1.5rem;
         }
 
         .social-links a {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             display: flex;
@@ -764,7 +487,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
 
         .social-links a:hover {
             background: var(--primary);
-            transform: translateY(-3px);
+            transform: translateY(-2px);
         }
 
         .copyright {
@@ -779,7 +502,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(20px);
             }
             to {
                 opacity: 1;
@@ -788,7 +511,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         }
 
         .fade-in-up {
-            animation: fadeInUp 0.8s ease forwards;
+            animation: fadeInUp 0.6s ease forwards;
         }
 
         .delay-1 {
@@ -799,10 +522,6 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             animation-delay: 0.4s;
         }
 
-        .delay-3 {
-            animation-delay: 0.6s;
-        }
-
         /* Responsive Design */
         @media (max-width: 768px) {
             section {
@@ -810,15 +529,23 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             }
             
             .hero-title {
-                font-size: 2.5rem;
+                font-size: 2rem;
             }
             
             .section-title h2 {
-                font-size: 2rem;
+                font-size: 1.75rem;
             }
             
             .feature-card, .class-card {
                 margin-bottom: 1.5rem;
+            }
+            
+            .hero-stats {
+                gap: 1.5rem;
+            }
+            
+            .stat-number {
+                font-size: 1.75rem;
             }
         }
     </style>
@@ -847,7 +574,6 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                     <li class="nav-item">
                         <a class="nav-link" href="#classes">Classes</a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link" href="#contact">Contact</a>
                     </li>
@@ -870,7 +596,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             <div class="hero-content">
                 <h1 class="hero-title fade-in-up">
                     Where Confidence Flows &<br>
-                    <span>Champions Grow</span>
+                    Champions Grow
                 </h1>
                 <p class="hero-subtitle fade-in-up delay-1">
                     <?= htmlspecialchars($school_description) ?>. Join Zimbabwe's premier swimming school offering 
@@ -884,7 +610,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         <i class="bi bi-play-circle"></i> Explore Classes
                     </a>
                 </div>
-                <div class="hero-stats fade-in-up delay-3">
+                <div class="hero-stats fade-in-up delay-1">
                     <div class="stat-item">
                         <div class="stat-number"><?= number_format($total_students) ?>+</div>
                         <div class="stat-label">Happy Students</div>
@@ -910,7 +636,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     <section id="about">
         <div class="container">
             <div class="section-title">
-                <h2>Why Choose <span class="text-gradient"><?= htmlspecialchars($school_name) ?></span>?</h2>
+                <h2>Why Choose <?= htmlspecialchars($school_name) ?>?</h2>
                 <p class="subtitle">We provide exceptional swimming education with a focus on safety, skill development, and fun.</p>
             </div>
             <div class="row g-4">
@@ -949,7 +675,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     <section class="bg-light" id="classes">
         <div class="container">
             <div class="section-title">
-                <h2>Featured <span class="text-gradient">Classes</span></h2>
+                <h2>Featured Classes</h2>
                 <p class="subtitle">Find the perfect swimming class for your age and skill level</p>
             </div>
             <?php
@@ -1134,7 +860,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             }, observerOptions);
 
             // Observe elements with animation classes
-            document.querySelectorAll('.feature-card, .class-card, .testimonial-card').forEach(el => {
+            document.querySelectorAll('.feature-card, .class-card').forEach(el => {
                 observer.observe(el);
             });
 

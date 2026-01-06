@@ -74,7 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $conn->rollback();
                 $error_msg = $e->getMessage();
                 
-                // Log error for debugging
                 error_log("Booking Cancellation Error - Student: {$student_id}, Booking: {$booking_id}, Error: " . $e->getMessage());
             }
         }
@@ -221,24 +220,17 @@ if (!empty($filters['search'])) {
     $param_types .= 'sss';
 }
 
-// Prepare query to get bookings with enhanced data - FIXED VERSION
+// Prepare query to get bookings
 $query = "SELECT 
             b.*,
             c.*,
             i.name as instructor_name,
-            i.email as instructor_email,
-            i.phone as instructor_phone,
-            i.specialization,
             p.status as payment_status,
             p.amount as payment_amount,
-            p.id as payment_id,
-            p.payment_date,
             CASE 
                 WHEN c.start_time >= NOW() THEN 'upcoming'
                 ELSE 'past'
-            END as time_status,
-            TIMESTAMPDIFF(HOUR, NOW(), c.start_time) as hours_until_class,
-            (SELECT COUNT(*) FROM bookings b2 WHERE b2.class_id = c.id AND b2.status = 'confirmed') as confirmed_bookings
+            END as time_status
           FROM bookings b
           JOIN classes c ON b.class_id = c.id
           LEFT JOIN instructors i ON c.instructor_id = i.id
@@ -271,15 +263,9 @@ if ($stmt) {
     $error_msg = "Unable to load bookings. Please try again later.";
 }
 
-// Get available classes for new bookings - SIMPLIFIED VERSION
+// Get available classes for new bookings
 $available_classes = [];
-$classes_query = "SELECT c.*, 
-                  i.name as instructor_name,
-                  CASE 
-                    WHEN c.slots_available <= 0 THEN 'full'
-                    WHEN c.slots_available <= 2 THEN 'almost_full'
-                    ELSE 'available'
-                  END as availability_status
+$classes_query = "SELECT c.*, i.name as instructor_name
                   FROM classes c
                   LEFT JOIN instructors i ON c.instructor_id = i.id
                   WHERE c.status = 'scheduled' 
@@ -301,13 +287,12 @@ if ($classes_stmt) {
     $classes_stmt->close();
 }
 
-// Get booking statistics with enhanced metrics - SIMPLIFIED VERSION
+// Get booking statistics
 $stats = [
     'total' => 0,
     'confirmed' => 0,
     'pending' => 0,
     'cancelled' => 0,
-    'upcoming' => 0,
     'rejected' => 0,
     'attended' => 0,
     'total_spent' => 0
@@ -319,7 +304,6 @@ $stats_query = "SELECT
     SUM(CASE WHEN b.status = 'pending' THEN 1 ELSE 0 END) as pending,
     SUM(CASE WHEN b.status = 'cancelled' THEN 1 ELSE 0 END) as cancelled,
     SUM(CASE WHEN b.status = 'rejected' THEN 1 ELSE 0 END) as rejected,
-    SUM(CASE WHEN c.start_time >= NOW() AND b.status IN ('confirmed', 'pending') THEN 1 ELSE 0 END) as upcoming,
     SUM(CASE WHEN c.start_time < NOW() AND b.status = 'confirmed' THEN 1 ELSE 0 END) as attended,
     COALESCE(SUM(CASE WHEN p.status = 'paid' THEN p.amount ELSE 0 END), 0) as total_spent
     FROM bookings b
@@ -346,12 +330,6 @@ if ($user_stmt) {
     $user = $user_result->fetch_assoc() ?: [];
     $user_stmt->close();
 }
-
-// Get pending bookings count for sidebar
-$pending_count = $stats['pending'] ?? 0;
-
-// Calculate cancellation rate
-$cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['total']) * 100, 1) : 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -361,54 +339,23 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
     <title>My Bookings | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        /* === CSS VARIABLES - Match Dashboard Theme === */
-        :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --primary-light: #e7f1ff;
-            --secondary: #6c757d;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --info: #0dcaf0;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --aqua: #0dcaf0;
-            --blue-light: #e7f1ff;
-            --gray-100: #f8f9fa;
-            --gray-200: #e9ecef;
-            --gray-300: #dee2e6;
-            --gray-400: #ced4da;
-            --gray-500: #adb5bd;
-            --gray-600: #6c757d;
-            --gray-700: #495057;
-            --gray-800: #343a40;
-            --gray-900: #212529;
-            --border-radius: 12px;
-            --box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            --transition: all 0.3s ease;
-        }
-
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8f9fa;
             color: #333;
         }
-
-        /* === DASHBOARD LAYOUT === */
+        
         .dashboard-container {
             display: flex;
             min-height: 100vh;
         }
-
-        /* Sidebar - Match Dashboard */
+        
+        /* Sidebar */
         .sidebar {
             width: 260px;
             background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-right: 1px solid #dee2e6;
             position: fixed;
             top: 0;
             left: 0;
@@ -416,579 +363,474 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
             z-index: 1000;
             padding: 20px 0;
         }
-
+        
         .logo-area {
             padding: 0 25px 25px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #dee2e6;
             margin-bottom: 20px;
         }
-
+        
         .logo {
             display: flex;
             align-items: center;
             gap: 12px;
             text-decoration: none;
-            color: var(--dark);
+            color: #212529;
         }
-
+        
         .logo-icon {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
-            border-radius: 10px;
+            background: #0d6efd;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-size: 20px;
         }
-
+        
         .logo-text h3 {
-            font-weight: 700;
-            font-size: 22px;
+            font-weight: 600;
+            font-size: 18px;
             margin: 0;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #0d6efd;
         }
-
+        
         .logo-text span {
             font-size: 12px;
             color: #6c757d;
         }
-
+        
         .nav-menu {
             padding: 0 15px;
         }
-
+        
         .nav-item {
             margin-bottom: 5px;
         }
-
+        
         .nav-link {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 12px 15px;
-            border-radius: 10px;
+            border-radius: 8px;
             color: #495057;
             text-decoration: none;
             font-weight: 500;
-            transition: var(--transition);
+            transition: all 0.2s ease;
         }
-
+        
         .nav-link:hover {
-            background: var(--blue-light);
-            color: var(--primary);
-            transform: translateX(5px);
+            background: #e9ecef;
+            color: #0d6efd;
         }
-
+        
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #0d6efd;
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
         }
-
+        
         .nav-link i {
             width: 20px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
         }
-
-        .notification-badge {
-            background: var(--danger);
-            color: white;
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            margin-left: auto;
-        }
-
+        
         .logout-section {
             padding: 20px;
             position: absolute;
             bottom: 0;
             width: 100%;
-            border-top: 1px solid #eee;
+            border-top: 1px solid #dee2e6;
         }
-
+        
         /* Main Content */
         .main-content {
             flex: 1;
             margin-left: 260px;
             padding: 30px;
         }
-
-        /* === HEADER - Match Dashboard === */
+        
+        /* Header */
         .header {
             background: white;
-            border-radius: 15px;
-            padding: 25px 30px;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 30px;
-            box-shadow: var(--box-shadow);
+            border: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
+        
         .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             margin-bottom: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #212529;
         }
-
+        
         .header-left p {
             color: #6c757d;
             margin: 0;
+            font-size: 14px;
         }
-
+        
         .user-profile {
             display: flex;
             align-items: center;
             gap: 15px;
-            background: var(--light);
-            padding: 12px 20px;
-            border-radius: 10px;
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 8px;
         }
-
+        
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 40px;
+            height: 40px;
+            background: #6c757d;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 16px;
         }
-
+        
         .user-info h5 {
             font-weight: 600;
             margin: 0;
+            font-size: 14px;
         }
-
+        
         .user-info p {
             color: #6c757d;
-            font-size: 14px;
+            font-size: 12px;
             margin: 0;
         }
-
-        /* === ALERTS - Match Dashboard === */
+        
+        /* Alerts */
         .alert-custom {
-            border-radius: 12px;
+            border-radius: 8px;
             border: none;
-            padding: 20px 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            animation: slideIn 0.5s ease;
+            padding: 15px 20px;
+            margin-bottom: 20px;
         }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* === QUICK STATS === */
+        
+        /* Quick Stats */
         .quick-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            gap: 15px;
             margin-bottom: 30px;
         }
-
+        
         .stat-card {
             background: white;
-            border-radius: 15px;
+            border-radius: 10px;
             padding: 20px;
-            box-shadow: var(--box-shadow);
-            transition: var(--transition);
-            border: 1px solid #e9ecef;
-            position: relative;
-            overflow: hidden;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s ease;
         }
-
+        
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
-        }
-
+        
         .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 20px;
+            font-size: 18px;
             margin-bottom: 15px;
             color: white;
         }
-
-        .stat-icon.primary { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%); }
-        .stat-icon.success { background: linear-gradient(135deg, var(--success) 0%, #157347 100%); }
-        .stat-icon.warning { background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%); }
-        .stat-icon.danger { background: linear-gradient(135deg, var(--danger) 0%, #b02a37 100%); }
-        .stat-icon.info { background: linear-gradient(135deg, var(--info) 0%, #0891b2 100%); }
-
+        
+        .stat-card:nth-child(1) .stat-icon { background: #0d6efd; }
+        .stat-card:nth-child(2) .stat-icon { background: #198754; }
+        .stat-card:nth-child(3) .stat-icon { background: #ffc107; }
+        .stat-card:nth-child(4) .stat-icon { background: #dc3545; }
+        
         .stat-content h3 {
-            font-size: 28px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             margin-bottom: 5px;
-            color: var(--dark);
+            color: #212529;
         }
-
+        
         .stat-content p {
             color: #6c757d;
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
         }
-
-        /* === FILTER SECTION === */
+        
+        /* Filter Section */
         .filter-section {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 30px;
-            box-shadow: var(--box-shadow);
+            border: 1px solid #dee2e6;
         }
-
+        
         .filter-tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
-
+        
         .filter-tab {
-            padding: 8px 20px;
-            background: var(--light);
-            border-radius: 8px;
-            color: var(--gray-600);
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            color: #6c757d;
             text-decoration: none;
             font-weight: 500;
-            transition: var(--transition);
-            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            border: 1px solid #dee2e6;
         }
-
+        
         .filter-tab:hover {
-            background: var(--gray-200);
-            color: var(--dark);
+            background: #e9ecef;
+            color: #212529;
         }
-
+        
         .filter-tab.active {
-            background: var(--primary);
+            background: #0d6efd;
             color: white;
-            border-color: var(--primary);
+            border-color: #0d6efd;
         }
-
+        
         .search-box {
             position: relative;
-            max-width: 400px;
+            max-width: 300px;
         }
-
+        
         .search-box input {
-            padding-left: 45px;
-            border-radius: 10px;
-            border: 2px solid var(--gray-300);
+            padding-left: 40px;
+            border-radius: 6px;
+            font-size: 14px;
         }
-
+        
         .search-box i {
             position: absolute;
-            left: 15px;
+            left: 12px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--gray-500);
+            color: #6c757d;
         }
-
-        /* === BOOKINGS GRID === */
+        
+        /* Bookings Grid */
         .bookings-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-            gap: 25px;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
             margin-bottom: 30px;
         }
-
-        @media (max-width: 992px) {
+        
+        @media (max-width: 768px) {
             .bookings-grid {
                 grid-template-columns: 1fr;
             }
         }
-
+        
         /* Booking Card */
         .booking-card {
             background: white;
-            border-radius: 15px;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s ease;
             overflow: hidden;
-            box-shadow: var(--box-shadow);
-            transition: var(--transition);
-            border: 1px solid #e9ecef;
         }
-
+        
         .booking-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-
+        
         .booking-header {
             padding: 20px;
-            border-bottom: 1px solid var(--gray-200);
+            border-bottom: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
         }
-
+        
         .booking-title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 600;
-            color: var(--dark);
+            color: #212529;
             margin: 0;
         }
-
+        
         .booking-status {
             display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
+            padding: 4px 10px;
+            border-radius: 4px;
             font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
+            font-weight: 500;
         }
-
-        .status-confirmed { background: rgba(25, 135, 84, 0.1); color: var(--success); }
-        .status-pending { background: rgba(255, 193, 7, 0.1); color: var(--warning); }
-        .status-cancelled { background: rgba(220, 53, 69, 0.1); color: var(--danger); }
-        .status-rejected { background: rgba(108, 117, 125, 0.1); color: var(--secondary); }
-
+        
+        .status-confirmed { background: rgba(25, 135, 84, 0.1); color: #198754; }
+        .status-pending { background: rgba(255, 193, 7, 0.1); color: #ffc107; }
+        .status-cancelled { background: rgba(220, 53, 69, 0.1); color: #dc3545; }
+        .status-rejected { background: rgba(108, 117, 125, 0.1); color: #6c757d; }
+        
         .booking-body {
             padding: 20px;
         }
-
+        
         .booking-details {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 15px;
             margin-bottom: 20px;
         }
-
+        
         .detail-item {
             display: flex;
             align-items: center;
             gap: 10px;
         }
-
+        
         .detail-item i {
-            color: var(--primary);
-            font-size: 16px;
-            width: 20px;
+            color: #0d6efd;
+            font-size: 14px;
+            width: 16px;
         }
-
+        
         .detail-label {
             font-size: 12px;
-            color: var(--gray-600);
+            color: #6c757d;
             margin-bottom: 3px;
         }
-
+        
         .detail-value {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 500;
-            color: var(--dark);
+            color: #212529;
         }
-
+        
         .booking-footer {
-            padding: 20px;
-            background: var(--light);
-            border-top: 1px solid var(--gray-200);
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
+        
         .booking-price {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+            color: #0d6efd;
         }
-
+        
         .booking-actions {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
-
+        
         .btn-action {
-            padding: 8px 16px;
-            border-radius: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
             font-weight: 500;
-            font-size: 14px;
-            transition: var(--transition);
+            font-size: 13px;
+            transition: all 0.2s ease;
             border: none;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 5px;
         }
-
+        
         .btn-action.primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #0d6efd;
             color: white;
         }
-
+        
         .btn-action.primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+            background: #0a58ca;
         }
-
+        
         .btn-action.secondary {
             background: white;
-            color: var(--dark);
-            border: 2px solid var(--gray-300);
+            color: #212529;
+            border: 1px solid #dee2e6;
         }
-
+        
         .btn-action.secondary:hover {
-            background: var(--gray-100);
-            border-color: var(--gray-400);
+            background: #f8f9fa;
         }
-
+        
         .btn-action.danger {
-            background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
-            color: #991b1b;
+            background: #dc3545;
+            color: white;
         }
-
+        
         .btn-action.danger:hover {
-            background: linear-gradient(135deg, #fca5a5 0%, #f87171 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+            background: #b02a37;
         }
-
-        /* === MODAL STYLES === */
+        
+        /* Modal Styles */
         .modal-class-card {
             background: white;
-            border: 2px solid var(--gray-200);
-            border-radius: 12px;
-            padding: 20px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
             cursor: pointer;
-            transition: var(--transition);
-            height: 100%;
+            transition: all 0.2s ease;
+            margin-bottom: 15px;
         }
-
+        
         .modal-class-card:hover {
-            border-color: var(--primary-light);
-            transform: translateY(-2px);
-            box-shadow: var(--box-shadow);
+            border-color: #0d6efd;
+            background: #f8f9fa;
         }
-
+        
         .modal-class-card.selected {
-            border-color: var(--primary);
-            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            border-color: #0d6efd;
+            background: #e7f1ff;
         }
-
-        /* === EMPTY STATE === */
+        
+        /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 40px 20px;
             background: white;
-            border-radius: 15px;
-            box-shadow: var(--box-shadow);
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
         }
-
+        
         .empty-state-icon {
-            font-size: 64px;
-            color: var(--gray-400);
-            margin-bottom: 20px;
+            font-size: 48px;
+            color: #dee2e6;
+            margin-bottom: 15px;
         }
-
+        
         .empty-state h3 {
-            font-size: 24px;
-            color: var(--dark);
+            font-size: 18px;
+            font-weight: 600;
             margin-bottom: 10px;
+            color: #495057;
         }
-
+        
         .empty-state p {
-            color: var(--gray-600);
-            margin-bottom: 30px;
+            color: #6c757d;
+            margin-bottom: 20px;
             max-width: 400px;
             margin-left: auto;
             margin-right: auto;
+            font-size: 14px;
         }
-
-        /* === LOADING OVERLAY === */
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.95);
-            z-index: 9999;
-            justify-content: center;
-            align-items: center;
-            backdrop-filter: blur(5px);
-        }
-
-        .loading-spinner {
-            text-align: center;
-            background: white;
-            padding: 40px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-        }
-
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid var(--primary-light);
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* === ANIMATIONS === */
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* === RESPONSIVE DESIGN === */
-        @media (max-width: 1200px) {
-            .main-content {
-                padding: 20px;
-            }
-            
-            .quick-stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
+        
+        /* Responsive */
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -1005,27 +847,26 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
             .logo {
                 justify-content: center;
             }
-            
-            .notification-badge {
-                position: absolute;
-                right: 5px;
-                top: 5px;
-            }
         }
-
+        
         @media (max-width: 768px) {
+            .main-content {
+                padding: 15px;
+            }
+            
             .header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 10px;
                 text-align: center;
-            }
-            
-            .quick-stats {
-                grid-template-columns: 1fr;
+                padding: 15px;
             }
             
             .filter-tabs {
                 justify-content: center;
+            }
+            
+            .search-box {
+                max-width: 100%;
             }
             
             .booking-details {
@@ -1041,58 +882,29 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
             .booking-actions {
                 justify-content: center;
             }
+            
+            .user-profile {
+                width: 100%;
+                justify-content: center;
+            }
         }
-
-        /* === ADDITIONAL ENHANCEMENTS === */
-        .time-until {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 10px;
-            background: rgba(13, 110, 253, 0.1);
-            color: var(--primary);
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .instructor-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 10px;
-            background: rgba(13, 202, 240, 0.1);
-            color: var(--info);
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .progress-bar {
-            height: 6px;
-            background: var(--gray-200);
-            border-radius: 3px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            border-radius: 3px;
-            transition: width 0.5s ease;
+        
+        @media (max-width: 576px) {
+            .quick-stats {
+                grid-template-columns: 1fr;
+            }
+            
+            .filter-tabs {
+                flex-direction: column;
+            }
+            
+            .filter-tab {
+                text-align: center;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p>Processing your request...</p>
-        </div>
-    </div>
-    
     <div class="dashboard-container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -1102,7 +914,7 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                         <i class="bi bi-droplet"></i>
                     </div>
                     <div class="logo-text">
-                        <h3>Elite Swimming Academy</h3>
+                        <h3>Elite Swimming</h3>
                         <span>Student Portal</span>
                     </div>
                 </a>
@@ -1125,9 +937,6 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                     <a href="my-bookings.php" class="nav-link active">
                         <i class="bi bi-ticket-perforated"></i>
                         <span class="nav-text">My Bookings</span>
-                        <?php if ($pending_count > 0): ?>
-                            <span class="notification-badge"><?= $pending_count ?></span>
-                        <?php endif; ?>
                     </a>
                 </div>
                 <div class="nav-item">
@@ -1160,7 +969,7 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
             <header class="header">
                 <div class="header-left">
                     <h1>My Bookings</h1>
-                    <p>Manage your swimming class bookings and track your progress</p>
+                    <p>Manage your swimming class bookings</p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
@@ -1168,7 +977,7 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                     </div>
                     <div class="user-info">
                         <h5><?= htmlspecialchars($user['name'] ?? 'Student') ?></h5>
-                        <p>Member Since <?= date('M Y', strtotime('-6 months')) ?></p>
+                        <p>Student ID: <?= htmlspecialchars($student_id) ?></p>
                     </div>
                 </div>
             </header>
@@ -1193,7 +1002,7 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
             <!-- Quick Stats -->
             <div class="quick-stats">
                 <div class="stat-card">
-                    <div class="stat-icon primary">
+                    <div class="stat-icon">
                         <i class="bi bi-ticket-perforated"></i>
                     </div>
                     <div class="stat-content">
@@ -1203,7 +1012,7 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                 </div>
                 
                 <div class="stat-card">
-                    <div class="stat-icon success">
+                    <div class="stat-icon">
                         <i class="bi bi-check-circle"></i>
                     </div>
                     <div class="stat-content">
@@ -1213,17 +1022,17 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                 </div>
                 
                 <div class="stat-card">
-                    <div class="stat-icon warning">
+                    <div class="stat-icon">
                         <i class="bi bi-clock-history"></i>
                     </div>
                     <div class="stat-content">
                         <h3><?= $stats['pending'] ?></h3>
-                        <p>Pending Approval</p>
+                        <p>Pending</p>
                     </div>
                 </div>
                 
                 <div class="stat-card">
-                    <div class="stat-icon danger">
+                    <div class="stat-icon">
                         <i class="bi bi-x-circle"></i>
                     </div>
                     <div class="stat-content">
@@ -1235,10 +1044,10 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
             
             <!-- Filter Section -->
             <div class="filter-section">
-                <div class="d-flex justify-content-between align-items-center mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
                     <div class="filter-tabs">
                         <a href="my-bookings.php" class="filter-tab <?= empty($filters['type']) && empty($filters['status']) ? 'active' : '' ?>">
-                            All Bookings
+                            All
                         </a>
                         <a href="my-bookings.php?type=upcoming" class="filter-tab <?= $filters['type'] === 'upcoming' ? 'active' : '' ?>">
                             Upcoming
@@ -1257,25 +1066,12 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                     <div class="d-flex gap-2">
                         <form method="GET" class="search-box">
                             <i class="bi bi-search"></i>
-                            <input type="text" name="search" class="form-control" placeholder="Search bookings..." value="<?= htmlspecialchars($filters['search']) ?>">
+                            <input type="text" name="search" class="form-control" placeholder="Search..." value="<?= htmlspecialchars($filters['search']) ?>">
                         </form>
                         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bookClassModal">
-                            <i class="bi bi-plus-circle me-2"></i>Book New Class
+                            <i class="bi bi-plus-circle me-2"></i>New Booking
                         </button>
                     </div>
-                </div>
-                
-                <div class="d-flex gap-3 align-items-center">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Showing <?= count($bookings) ?> booking<?= count($bookings) !== 1 ? 's' : '' ?>
-                    </small>
-                    <div class="progress-bar" style="flex: 1; max-width: 300px;">
-                        <div class="progress-fill" style="width: <?= $stats['total'] > 0 ? ($stats['attended'] / $stats['total'] * 100) : 0 ?>%"></div>
-                    </div>
-                    <small class="text-muted">
-                        <?= $stats['attended'] ?> of <?= $stats['total'] ?> completed
-                    </small>
                 </div>
             </div>
             
@@ -1288,23 +1084,20 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                     <h3>No Bookings Found</h3>
                     <p>
                         <?php if ($filters['type'] || $filters['status'] || $filters['search']): ?>
-                            No bookings match your current filters. Try adjusting your search criteria.
+                            No bookings match your current filters.
                         <?php else: ?>
-                            You haven't booked any classes yet. Start your swimming journey today!
+                            You haven't booked any classes yet.
                         <?php endif; ?>
                     </p>
-                    <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#bookClassModal">
-                        <i class="bi bi-plus-circle me-2"></i>Book Your First Class
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bookClassModal">
+                        <i class="bi bi-plus-circle me-2"></i>Book a Class
                     </button>
                 </div>
             <?php else: ?>
-                <div class="bookings-grid fade-in">
+                <div class="bookings-grid">
                     <?php foreach ($bookings as $booking): 
                         $start_time = strtotime($booking['start_time']);
                         $end_time = strtotime($booking['end_time']);
-                        $duration = ($end_time - $start_time) / 60;
-                        $is_upcoming = $start_time > time();
-                        $is_today = date('Y-m-d', $start_time) === date('Y-m-d');
                         $has_end_time = !empty($booking['end_time']) && $booking['end_time'] != '0000-00-00 00:00:00';
                         
                         // Determine status color
@@ -1318,27 +1111,13 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                             <div class="booking-header">
                                 <div>
                                     <h5 class="booking-title"><?= htmlspecialchars($booking['title']) ?></h5>
-                                    <div class="d-flex align-items-center gap-2 mt-2">
-                                        <span class="booking-status <?= $status_class ?>">
-                                            <?= ucfirst($booking['status']) ?>
-                                        </span>
-                                        <?php if ($is_today && $is_upcoming): ?>
-                                            <span class="time-until">
-                                                <i class="bi bi-clock"></i>
-                                                Today, <?= date('g:i A', $start_time) ?>
-                                            </span>
-                                        <?php elseif ($is_upcoming): ?>
-                                            <span class="time-until">
-                                                <i class="bi bi-clock"></i>
-                                                In <?= $booking['hours_until_class'] ?>h
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
+                                    <span class="booking-status <?= $status_class ?> mt-2 d-inline-block">
+                                        <?= ucfirst($booking['status']) ?>
+                                    </span>
                                 </div>
-                                <div class="instructor-badge">
-                                    <i class="bi bi-person"></i>
+                                <small class="text-muted">
                                     <?= htmlspecialchars($booking['instructor_name'] ?? 'TBA') ?>
-                                </div>
+                                </small>
                             </div>
                             
                             <div class="booking-body">
@@ -1347,7 +1126,7 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                                         <i class="bi bi-calendar"></i>
                                         <div>
                                             <div class="detail-label">Date</div>
-                                            <div class="detail-value"><?= date('F j, Y', $start_time) ?></div>
+                                            <div class="detail-value"><?= date('M j, Y', $start_time) ?></div>
                                         </div>
                                     </div>
                                     
@@ -1384,22 +1163,15 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                                 </div>
                                 
                                 <?php if (!empty($booking['child_name'])): ?>
-                                    <div class="mt-3 p-3 bg-light rounded">
+                                    <div class="mt-3 p-2 bg-light rounded">
+                                        <small class="text-muted">Child:</small>
                                         <div class="d-flex align-items-center gap-2">
                                             <i class="bi bi-person text-primary"></i>
-                                            <strong>Child:</strong>
                                             <span><?= htmlspecialchars($booking['child_name']) ?></span>
                                             <?php if ($booking['child_age']): ?>
-                                                <span class="text-muted">(Age: <?= $booking['child_age'] ?>)</span>
+                                                <span class="text-muted">(<?= $booking['child_age'] ?>)</span>
                                             <?php endif; ?>
                                         </div>
-                                    </div>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($booking['special_notes'])): ?>
-                                    <div class="mt-3">
-                                        <small class="text-muted">Notes:</small>
-                                        <p class="mb-0"><?= htmlspecialchars($booking['special_notes']) ?></p>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -1409,8 +1181,8 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                                     $<?= number_format($booking['price'], 2) ?>
                                 </div>
                                 <div class="booking-actions">
-                                    <?php if ($is_upcoming && in_array($booking['status'], ['confirmed', 'pending'])): ?>
-                                        <form method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this booking?')">
+                                    <?php if ($start_time > time() && in_array($booking['status'], ['confirmed', 'pending'])): ?>
+                                        <form method="POST" class="d-inline" onsubmit="return confirm('Cancel this booking?')">
                                             <input type="hidden" name="action" value="cancel_booking">
                                             <input type="hidden" name="booking_id" value="<?= $booking['id'] ?>">
                                             <button type="submit" class="btn-action danger">
@@ -1423,25 +1195,13 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                                     <?php if (($booking['payment_status'] ?? 'pending') === 'pending'): ?>
                                         <button class="btn-action primary" onclick="window.location.href='payments.php?booking_id=<?= $booking['id'] ?>'">
                                             <i class="bi bi-credit-card"></i>
-                                            Pay Now
+                                            Pay
                                         </button>
                                     <?php endif; ?>
-                                    
-                                    <button class="btn-action secondary" onclick="viewBookingDetails(<?= $booking['id'] ?>)">
-                                        <i class="bi bi-eye"></i>
-                                        View
-                                    </button>
                                 </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                </div>
-                
-                <!-- Pagination or View All -->
-                <div class="text-center mt-4">
-                    <a href="my-bookings.php?type=all" class="btn btn-outline-primary">
-                        <i class="bi bi-list-ul me-2"></i>View All Bookings
-                    </a>
                 </div>
             <?php endif; ?>
         </main>
@@ -1465,57 +1225,41 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                             <?php if (empty($available_classes)): ?>
                                 <div class="alert alert-warning">
                                     <i class="bi bi-exclamation-triangle me-2"></i>
-                                    No available classes at the moment. Please check back later.
+                                    No available classes at the moment.
                                 </div>
                             <?php else: ?>
-                                <div class="row">
-                                    <?php foreach ($available_classes as $class): 
-                                        $availability_class = $class['availability_status'] === 'full' ? 'border-danger' : 
-                                                            ($class['availability_status'] === 'almost_full' ? 'border-warning' : 'border-success');
-                                    ?>
-                                        <div class="col-md-6 mb-3">
-                                            <div class="modal-class-card <?= $availability_class ?>" onclick="selectClass(this, <?= $class['id'] ?>)">
-                                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                                    <h6 class="mb-0 fw-semibold"><?= htmlspecialchars($class['title']) ?></h6>
-                                                    <span class="badge bg-<?= $class['availability_status'] === 'full' ? 'danger' : 
-                                                                         ($class['availability_status'] === 'almost_full' ? 'warning' : 'success') ?>">
-                                                        <?= ucfirst(str_replace('_', ' ', $class['availability_status'])) ?>
-                                                    </span>
-                                                </div>
-                                                <p class="text-muted mb-2 small">
-                                                    <i class="bi bi-person me-1"></i>
-                                                    <?= htmlspecialchars($class['instructor_name'] ?? 'TBA') ?>
-                                                </p>
-                                                <div class="mb-2">
-                                                    <i class="bi bi-calendar me-1"></i>
-                                                    <?= date('D, M j', strtotime($class['start_time'])) ?>
-                                                </div>
-                                                <div class="mb-3">
-                                                    <i class="bi bi-clock me-1"></i>
-                                                    <?= date('g:i A', strtotime($class['start_time'])) ?>
-                                                    <?php if (!empty($class['end_time']) && $class['end_time'] != '0000-00-00 00:00:00'): ?>
-                                                        - <?= date('g:i A', strtotime($class['end_time'])) ?>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <span class="h5 text-primary mb-0">$<?= number_format($class['price'], 2) ?></span>
-                                                    <small class="text-muted">
-                                                        <?= $class['slots_available'] ?> slots available
-                                                    </small>
-                                                </div>
-                                            </div>
+                                <?php foreach ($available_classes as $class): ?>
+                                    <div class="modal-class-card" onclick="selectClass(this, <?= $class['id'] ?>)">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="mb-0 fw-semibold"><?= htmlspecialchars($class['title']) ?></h6>
+                                            <small class="text-muted">
+                                                <?= $class['slots_available'] ?> slots
+                                            </small>
                                         </div>
-                                    <?php endforeach; ?>
-                                </div>
+                                        <p class="text-muted mb-2 small">
+                                            <i class="bi bi-person me-1"></i>
+                                            <?= htmlspecialchars($class['instructor_name'] ?? 'TBA') ?>
+                                        </p>
+                                        <div class="mb-2">
+                                            <i class="bi bi-calendar me-1"></i>
+                                            <?= date('M j', strtotime($class['start_time'])) ?>
+                                        </div>
+                                        <div class="mb-3">
+                                            <i class="bi bi-clock me-1"></i>
+                                            <?= date('g:i A', strtotime($class['start_time'])) ?>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="h5 text-primary mb-0">$<?= number_format($class['price'], 2) ?></span>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
                                 <input type="hidden" name="class_id" id="selected_class_id" required>
                             <?php endif; ?>
                         </div>
                         
                         <!-- Child Information -->
                         <div class="mb-4">
-                            <h6 class="mb-3">
-                                <i class="bi bi-person me-2"></i>Participant Information (Optional)
-                            </h6>
+                            <h6 class="mb-3">Participant Information (Optional)</h6>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Child's Name</label>
@@ -1539,24 +1283,16 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
                         
                         <!-- Additional Information -->
                         <div class="mb-3">
-                            <h6 class="mb-3">
-                                <i class="bi bi-sticky me-2"></i>Additional Information
-                            </h6>
                             <div class="mb-3">
                                 <label class="form-label">Special Notes</label>
-                                <textarea name="special_notes" class="form-control" rows="3" placeholder="Any special requirements, allergies, or notes..."></textarea>
-                            </div>
-                            
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>Note:</strong> Your booking request will be sent for admin approval. You'll receive a notification once it's approved or rejected.
+                                <textarea name="special_notes" class="form-control" rows="3" placeholder="Any special requirements or notes..."></textarea>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-primary" id="submitBookingBtn" <?= empty($available_classes) ? 'disabled' : '' ?>>
-                            <i class="bi bi-send me-2"></i>Submit Booking Request
+                            Submit Booking Request
                         </button>
                     </div>
                 </form>
@@ -1564,183 +1300,45 @@ $cancellation_rate = $stats['total'] > 0 ? round(($stats['cancelled'] / $stats['
         </div>
     </div>
 
-    <!-- View Details Modal -->
-    <div class="modal fade" id="viewDetailsModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Booking Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="bookingDetailsContent">
-                    <!-- Content will be loaded via JavaScript -->
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Global variables
-        let selectedClassId = null;
-        let selectedClassElement = null;
-        
-        // Show loading overlay
-        function showLoading() {
-            document.getElementById('loadingOverlay').style.display = 'flex';
-        }
-        
-        // Hide loading overlay
-        function hideLoading() {
-            document.getElementById('loadingOverlay').style.display = 'none';
-        }
-        
         // Select class for booking
         function selectClass(element, classId) {
             // Remove selected class from all cards
             document.querySelectorAll('.modal-class-card').forEach(card => {
                 card.classList.remove('selected');
-                card.style.borderColor = '';
             });
             
             // Add selected class to clicked card
             element.classList.add('selected');
-            element.style.borderColor = '#0d6efd';
-            
-            // Set selected values
-            selectedClassId = classId;
-            selectedClassElement = element;
             
             // Update hidden input
             document.getElementById('selected_class_id').value = classId;
             
             // Enable submit button
             document.getElementById('submitBookingBtn').disabled = false;
-            
-            // Scroll to selected card
-            element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-        
-        // View booking details
-        function viewBookingDetails(bookingId) {
-            showLoading();
-            
-            // In a real application, you would fetch booking details via AJAX
-            // For now, we'll show a simple alert
-            hideLoading();
-            alert(`Booking #${bookingId} details:\n\nThis feature would show complete booking information, instructor contact, location details, and more.`);
-            
-            // Example AJAX implementation:
-            /*
-            fetch(`get-booking-details.php?id=${bookingId}`)
-                .then(response => response.json())
-                .then(data => {
-                    const modal = new bootstrap.Modal(document.getElementById('viewDetailsModal'));
-                    document.getElementById('bookingDetailsContent').innerHTML = `
-                        <h5>${data.title}</h5>
-                        <p>${data.description}</p>
-                    `;
-                    modal.show();
-                })
-                .finally(() => hideLoading());
-            */
         }
         
         // Handle booking form submission
         document.getElementById('bookingForm')?.addEventListener('submit', function(e) {
-            if (!selectedClassId) {
+            if (!document.getElementById('selected_class_id').value) {
                 e.preventDefault();
                 alert('Please select a class first.');
                 return false;
             }
             
-            if (!confirm('Submit booking request? The admin will review and approve/reject your request.')) {
+            if (!confirm('Submit booking request?')) {
                 e.preventDefault();
                 return false;
             }
-            
-            showLoading();
-            // Form will submit normally, loading overlay will be hidden on page reload
         });
         
-        // Handle cancellation with confirmation
-        document.querySelectorAll('form[onsubmit*="confirm"]').forEach(form => {
-            form.onsubmit = function(e) {
-                if (!confirm('Are you sure you want to cancel this booking?\n\nThis action cannot be undone and will free up your slot.')) {
-                    return false;
-                }
-                showLoading();
-            };
-        });
-        
-        // Initialize page
-        document.addEventListener('DOMContentLoaded', function() {
-            // Add animations to booking cards
-            const cards = document.querySelectorAll('.booking-card');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.1}s`;
-                card.classList.add('fade-in');
-            });
-            
-            // Animate stat numbers
-            const statValues = document.querySelectorAll('.stat-content h3');
-            statValues.forEach(stat => {
-                const target = parseInt(stat.textContent);
-                let current = 0;
-                const increment = Math.ceil(target / 30);
-                const interval = 40;
-                
-                const timer = setInterval(() => {
-                    current += increment;
-                    if (current >= target) {
-                        current = target;
-                        clearInterval(timer);
-                    }
-                    stat.textContent = current.toLocaleString();
-                }, interval);
-            });
-            
-            // Auto-hide alerts after 5 seconds
+        // Auto-hide alerts after 5 seconds
+        document.querySelectorAll('.alert').forEach(alert => {
             setTimeout(() => {
-                document.querySelectorAll('.alert').forEach(alert => {
-                    const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-                    bsAlert.close();
-                });
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
+                bsAlert.close();
             }, 5000);
-            
-            // Add search form auto-submit
-            const searchInput = document.querySelector('input[name="search"]');
-            if (searchInput) {
-                let searchTimer;
-                searchInput.addEventListener('keyup', function() {
-                    clearTimeout(searchTimer);
-                    searchTimer = setTimeout(() => {
-                        this.form.submit();
-                    }, 500);
-                });
-            }
-            
-            // Check if URL has success parameter and scroll to alert
-            if (window.location.search.includes('success')) {
-                setTimeout(() => {
-                    const successAlert = document.querySelector('.alert-success');
-                    if (successAlert) {
-                        successAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }, 300);
-            }
-        });
-        
-        // Add smooth scroll to top when clicking filter tabs
-        document.querySelectorAll('.filter-tab').forEach(tab => {
-            tab.addEventListener('click', function(e) {
-                e.preventDefault();
-                const url = this.href;
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                setTimeout(() => {
-                    window.location.href = url;
-                }, 300);
-            });
         });
     </script>
 </body>

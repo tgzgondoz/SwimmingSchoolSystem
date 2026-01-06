@@ -39,7 +39,7 @@ try {
     $upcoming_classes = $upcoming_classes_result->fetch_assoc()['total'] ?? 0;
     $upcoming_classes_stmt->close();
 
-    // Completed classes (classes that have ended)
+    // Completed classes
     $completed_classes_stmt = $conn->prepare("
         SELECT COUNT(*) as total 
         FROM bookings b 
@@ -115,7 +115,7 @@ try {
     $recommended_classes = $recommended_classes_result->fetch_all(MYSQLI_ASSOC) ?: [];
     $recommended_classes_stmt->close();
 
-    // Get attendance progress (last 30 days)
+    // Get attendance progress
     $attendance_stats_stmt = $conn->prepare("
         SELECT 
             COUNT(*) as total_classes,
@@ -154,7 +154,6 @@ try {
 
 } catch (Exception $e) {
     error_log("Dashboard query error: " . $e->getMessage());
-    // Initialize empty values if queries fail
     $total_bookings = 0;
     $upcoming_classes = 0;
     $completed_classes = 0;
@@ -178,11 +177,9 @@ if ($user_stmt) {
     $user_stmt->close();
 }
 
-// Get current date and time
 $current_date = date('l, F j, Y');
 $current_time = date('g:i A');
 
-// Load success message from session
 if (isset($_SESSION['success_msg'])) {
     $success_msg = $_SESSION['success_msg'];
     unset($_SESSION['success_msg']);
@@ -196,30 +193,10 @@ if (isset($_SESSION['success_msg'])) {
     <title>Dashboard | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --aqua: #0dcaf0;
-            --blue-light: #e7f1ff;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8f9fa;
             color: #333;
         }
         
@@ -232,7 +209,7 @@ if (isset($_SESSION['success_msg'])) {
         .sidebar {
             width: 260px;
             background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-right: 1px solid #dee2e6;
             position: fixed;
             top: 0;
             left: 0;
@@ -243,7 +220,7 @@ if (isset($_SESSION['success_msg'])) {
         
         .logo-area {
             padding: 0 25px 25px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #dee2e6;
             margin-bottom: 20px;
         }
         
@@ -252,14 +229,14 @@ if (isset($_SESSION['success_msg'])) {
             align-items: center;
             gap: 12px;
             text-decoration: none;
-            color: var(--dark);
+            color: #212529;
         }
         
         .logo-icon {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
-            border-radius: 10px;
+            background: #0d6efd;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -268,12 +245,10 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .logo-text h3 {
-            font-weight: 700;
-            font-size: 22px;
+            font-weight: 600;
+            font-size: 18px;
             margin: 0;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #0d6efd;
         }
         
         .logo-text span {
@@ -294,29 +269,27 @@ if (isset($_SESSION['success_msg'])) {
             align-items: center;
             gap: 12px;
             padding: 12px 15px;
-            border-radius: 10px;
+            border-radius: 8px;
             color: #495057;
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
         
         .nav-link:hover {
-            background: var(--blue-light);
-            color: var(--primary);
-            transform: translateX(5px);
+            background: #e9ecef;
+            color: #0d6efd;
         }
         
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #0d6efd;
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
         }
         
         .nav-link i {
             width: 20px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .logout-section {
@@ -324,7 +297,7 @@ if (isset($_SESSION['success_msg'])) {
             position: absolute;
             bottom: 0;
             width: 100%;
-            border-top: 1px solid #eee;
+            border-top: 1px solid #dee2e6;
         }
         
         /* Main Content */
@@ -337,140 +310,77 @@ if (isset($_SESSION['success_msg'])) {
         /* Header */
         .header {
             background: white;
-            border-radius: 15px;
-            padding: 25px 30px;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             margin-bottom: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #212529;
         }
         
         .header-left p {
             color: #6c757d;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-profile {
             display: flex;
             align-items: center;
             gap: 15px;
-            background: var(--light);
-            padding: 12px 20px;
-            border-radius: 10px;
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 8px;
         }
         
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 40px;
+            height: 40px;
+            background: #6c757d;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 16px;
         }
         
         .user-info h5 {
             font-weight: 600;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-info p {
             color: #6c757d;
-            font-size: 14px;
+            font-size: 12px;
             margin: 0;
         }
         
         /* Alerts */
         .alert-custom {
-            border-radius: 12px;
+            border-radius: 8px;
             border: none;
-            padding: 20px 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            animation: slideIn 0.5s ease;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        /* Welcome Banner */
-        .welcome-banner {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-radius: 15px;
-            padding: 30px;
-            color: white;
-            margin-bottom: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .welcome-banner::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -20%;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
-            border-radius: 50%;
-        }
-        
-        .banner-content {
-            position: relative;
-            z-index: 2;
-        }
-        
-        .banner-content h2 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-        
-        .banner-content p {
-            font-size: 16px;
-            opacity: 0.9;
+            padding: 15px 20px;
             margin-bottom: 20px;
-            max-width: 600px;
-        }
-        
-        .date-time {
-            display: inline-block;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-size: 14px;
-            backdrop-filter: blur(10px);
         }
         
         /* Next Class Banner */
         .next-class-banner {
-            background: linear-gradient(135deg, var(--success) 0%, #157347 100%);
+            background: #198754;
             color: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
             display: <?= $next_class ? 'block' : 'none' ?>;
         }
         
@@ -478,35 +388,35 @@ if (isset($_SESSION['success_msg'])) {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .next-class-icon {
-            width: 60px;
-            height: 60px;
+            width: 50px;
+            height: 50px;
             background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
+            font-size: 24px;
         }
         
         .next-class-info h4 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 24px;
+            font-size: 18px;
             margin-bottom: 5px;
         }
         
         .next-class-info p {
             opacity: 0.9;
             margin: 0;
+            font-size: 14px;
         }
         
         .countdown {
             display: flex;
             gap: 20px;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         
         .countdown-item {
@@ -514,13 +424,13 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .countdown-number {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             margin-bottom: 5px;
         }
         
         .countdown-label {
-            font-size: 12px;
+            font-size: 11px;
             opacity: 0.8;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -529,64 +439,50 @@ if (isset($_SESSION['success_msg'])) {
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
             margin-bottom: 30px;
         }
         
         .stat-card {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
-            position: relative;
-            overflow: hidden;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s ease;
         }
         
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .stat-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            margin-bottom: 20px;
+            font-size: 20px;
+            margin-bottom: 15px;
             color: white;
         }
         
-        .stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, var(--success) 0%, #157347 100%); }
-        .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%); }
-        .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, var(--aqua) 0%, #0891b2 100%); }
+        .stat-card:nth-child(1) .stat-icon { background: #0d6efd; }
+        .stat-card:nth-child(2) .stat-icon { background: #198754; }
+        .stat-card:nth-child(3) .stat-icon { background: #ffc107; }
+        .stat-card:nth-child(4) .stat-icon { background: #6c757d; }
         
         .stat-content h3 {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             margin-bottom: 5px;
-            color: var(--dark);
+            color: #212529;
         }
         
         .stat-content p {
             color: #6c757d;
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
         }
         
@@ -594,7 +490,7 @@ if (isset($_SESSION['success_msg'])) {
         .content-grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 30px;
+            gap: 20px;
             margin-bottom: 30px;
         }
         
@@ -607,150 +503,137 @@ if (isset($_SESSION['success_msg'])) {
         /* Panel Styling */
         .panel {
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
             overflow: hidden;
-            border: 1px solid #e9ecef;
+            margin-bottom: 20px;
         }
         
         .panel-header {
-            padding: 20px 25px;
-            border-bottom: 1px solid #e9ecef;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .panel-header h3 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: #212529;
         }
         
         .panel-header .btn-link {
-            color: var(--primary);
+            color: #0d6efd;
             text-decoration: none;
             font-weight: 500;
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             align-items: center;
             gap: 5px;
-            transition: all 0.3s ease;
-        }
-        
-        .panel-header .btn-link:hover {
-            color: var(--primary-dark);
-            gap: 8px;
         }
         
         .panel-body {
-            padding: 25px;
+            padding: 20px;
         }
         
         /* Class List */
         .class-list {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
         }
         
         .class-item {
             display: flex;
             align-items: center;
-            padding: 20px;
-            background: var(--light);
-            border-radius: 12px;
-            border-left: 4px solid var(--primary);
-            transition: all 0.3s ease;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #0d6efd;
+            transition: all 0.2s ease;
         }
         
         .class-item:hover {
             background: #e9ecef;
-            transform: translateX(5px);
         }
         
         .class-time {
-            min-width: 100px;
+            min-width: 80px;
             text-align: center;
-            padding-right: 20px;
+            padding-right: 15px;
             border-right: 1px solid #dee2e6;
         }
         
         .class-date {
-            font-size: 14px;
+            font-size: 12px;
             color: #6c757d;
             margin-bottom: 5px;
         }
         
         .class-hour {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--dark);
+            font-size: 16px;
+            font-weight: 600;
+            color: #212529;
         }
         
         .class-details {
             flex: 1;
-            padding: 0 20px;
+            padding: 0 15px;
         }
         
         .class-title {
-            font-weight: 600;
-            color: var(--dark);
+            font-weight: 500;
+            color: #212529;
             margin-bottom: 5px;
+            font-size: 14px;
         }
         
         .class-instructor {
-            font-size: 14px;
+            font-size: 12px;
             color: #6c757d;
             margin-bottom: 5px;
         }
         
         .class-instructor i {
-            color: var(--primary);
+            color: #0d6efd;
             margin-right: 5px;
         }
         
         .class-status {
-            min-width: 100px;
+            min-width: 80px;
             text-align: center;
         }
         
         .status-badge {
             display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
         }
         
         .status-badge.confirmed {
             background: rgba(25, 135, 84, 0.1);
-            color: var(--success);
-        }
-        
-        .status-badge.pending {
-            background: rgba(255, 193, 7, 0.1);
-            color: var(--warning);
+            color: #198754;
         }
         
         /* Payment List */
         .payment-list {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 10px;
         }
         
         .payment-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 15px;
-            background: var(--light);
-            border-radius: 12px;
-            transition: all 0.3s ease;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: all 0.2s ease;
         }
         
         .payment-item:hover {
@@ -758,52 +641,48 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .payment-info h5 {
-            font-weight: 600;
+            font-weight: 500;
             margin-bottom: 5px;
-            color: var(--dark);
+            color: #212529;
+            font-size: 14px;
         }
         
         .payment-date {
-            font-size: 13px;
+            font-size: 12px;
             color: #6c757d;
         }
         
         .payment-amount {
-            font-weight: 700;
-            font-size: 18px;
-            color: var(--dark);
+            font-weight: 600;
+            font-size: 14px;
+            color: #212529;
         }
         
         .payment-status {
             display: inline-block;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-left: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
         }
         
         .status-paid {
             background: rgba(25, 135, 84, 0.1);
-            color: var(--success);
+            color: #198754;
         }
         
         .status-pending {
             background: rgba(255, 193, 7, 0.1);
-            color: var(--warning);
-        }
-        
-        .status-failed {
-            background: rgba(220, 53, 69, 0.1);
-            color: var(--danger);
+            color: #ffc107;
         }
         
         /* Progress Card */
         .progress-card {
-            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+            background: #6c757d;
             color: white;
-            border-radius: 15px;
-            padding: 25px;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 20px;
         }
         
@@ -811,62 +690,60 @@ if (isset($_SESSION['success_msg'])) {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .progress-icon {
-            width: 50px;
-            height: 50px;
+            width: 40px;
+            height: 40px;
             background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 18px;
         }
         
         .progress-content h4 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 20px;
+            font-size: 16px;
             margin-bottom: 5px;
         }
         
         .progress-content p {
             opacity: 0.8;
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
         }
         
         .progress-bar-container {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .progress-label {
             display: flex;
             justify-content: space-between;
             margin-bottom: 8px;
-            font-size: 14px;
+            font-size: 13px;
         }
         
         .progress-bar {
-            height: 8px;
+            height: 6px;
             background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
+            border-radius: 3px;
             overflow: hidden;
         }
         
         .progress-fill {
             height: 100%;
-            background: linear-gradient(90deg, #60a5fa, #93c5fd);
-            border-radius: 4px;
-            transition: width 0.5s ease;
+            background: #adb5bd;
+            border-radius: 3px;
         }
         
         /* Quick Actions */
         .quick-actions {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
         }
         
         .action-btn {
@@ -874,121 +751,107 @@ if (isset($_SESSION['success_msg'])) {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 20px 15px;
-            background: var(--light);
-            border-radius: 12px;
+            padding: 15px 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
             text-decoration: none;
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            border: 1px solid #dee2e6;
         }
         
         .action-btn:hover {
-            background: white;
-            border-color: var(--primary);
-            transform: translateY(-3px);
-            box-shadow: 0 5px 20px rgba(13, 110, 253, 0.1);
+            background: #e9ecef;
+            border-color: #0d6efd;
         }
         
         .action-btn i {
-            font-size: 24px;
-            color: var(--primary);
-            margin-bottom: 10px;
+            font-size: 20px;
+            color: #0d6efd;
+            margin-bottom: 8px;
         }
         
         .action-btn span {
-            font-weight: 600;
-            color: var(--dark);
+            font-weight: 500;
+            color: #212529;
             text-align: center;
-            font-size: 14px;
+            font-size: 12px;
         }
         
         /* Recommended Classes */
         .recommended-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 15px;
         }
         
         .class-card {
             background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s ease;
         }
         
         .class-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .class-image {
-            height: 150px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 120px;
+            background: #e9ecef;
             position: relative;
-            overflow: hidden;
         }
         
         .class-badge {
             position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
         }
         
         .class-content {
-            padding: 20px;
+            padding: 15px;
         }
         
         .class-content h4 {
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: var(--dark);
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #212529;
+            font-size: 14px;
         }
         
         .class-meta {
             display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-            font-size: 13px;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 10px;
+            font-size: 12px;
             color: #6c757d;
-        }
-        
-        .class-meta i {
-            color: var(--primary);
-            margin-right: 5px;
         }
         
         .class-actions {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 15px;
+            margin-top: 10px;
         }
         
         .slots-info {
-            font-size: 13px;
+            font-size: 12px;
             color: #6c757d;
-        }
-        
-        .slots-info strong {
-            color: var(--success);
         }
         
         /* Student Level Card */
         .level-card {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #dee2e6;
             margin-bottom: 20px;
         }
         
@@ -996,75 +859,66 @@ if (isset($_SESSION['success_msg'])) {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .level-icon {
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            background: #6f42c1;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 24px;
+            font-size: 18px;
         }
         
         .level-content h4 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 20px;
+            font-size: 16px;
             margin-bottom: 5px;
-            color: var(--dark);
+            color: #212529;
         }
         
         .level-content p {
             color: #6c757d;
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
         }
         
         .level-badge {
             display: inline-block;
-            padding: 8px 16px;
-            background: rgba(139, 92, 246, 0.1);
-            color: #8b5cf6;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 14px;
+            padding: 6px 12px;
+            background: rgba(111, 66, 193, 0.1);
+            color: #6f42c1;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 13px;
         }
         
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
+            padding: 30px 20px;
             color: #6c757d;
         }
         
         .empty-state i {
-            font-size: 48px;
-            margin-bottom: 15px;
+            font-size: 32px;
+            margin-bottom: 10px;
             opacity: 0.3;
         }
         
         .empty-state h5 {
-            font-weight: 600;
-            margin-bottom: 10px;
+            font-weight: 500;
+            margin-bottom: 5px;
             color: #495057;
+            font-size: 14px;
         }
         
         .empty-state p {
-            margin-bottom: 20px;
-        }
-        
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
+            margin-bottom: 15px;
+            font-size: 13px;
         }
         
         /* Responsive */
@@ -1092,35 +946,49 @@ if (isset($_SESSION['success_msg'])) {
         
         @media (max-width: 768px) {
             .main-content {
-                padding: 20px;
+                padding: 15px;
             }
             
             .header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 10px;
                 text-align: center;
+                padding: 15px;
             }
             
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .recommended-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .quick-actions {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .user-profile {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        
+        @media (max-width: 576px) {
             .stats-grid {
                 grid-template-columns: 1fr;
             }
             
-            .welcome-banner {
-                padding: 20px;
-            }
-            
-            .banner-content h2 {
-                font-size: 24px;
+            .next-class-banner {
+                padding: 15px;
             }
             
             .countdown {
-                flex-wrap: wrap;
-                justify-content: center;
+                gap: 10px;
             }
             
-            .countdown-item {
-                flex: 1;
-                min-width: 70px;
+            .countdown-number {
+                font-size: 20px;
             }
         }
     </style>
@@ -1135,7 +1003,7 @@ if (isset($_SESSION['success_msg'])) {
                         <i class="bi bi-droplet"></i>
                     </div>
                     <div class="logo-text">
-                        <h3>Elite Swimming Academy</h3>
+                        <h3>Elite Swimming</h3>
                         <span>Student Portal</span>
                     </div>
                 </a>
@@ -1189,8 +1057,8 @@ if (isset($_SESSION['success_msg'])) {
             <!-- Header -->
             <header class="header">
                 <div class="header-left">
-                    <h1 id="greeting">Welcome back, <?= htmlspecialchars($user['name'] ?? 'Student') ?>! 👋</h1>
-                    <p>Here's what's happening with your swimming journey today</p>
+                    <h1>Welcome, <?= htmlspecialchars($user['name'] ?? 'Student') ?>!</h1>
+                    <p>Manage your swimming classes and progress</p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
@@ -1222,13 +1090,13 @@ if (isset($_SESSION['success_msg'])) {
             
             <!-- Next Class Banner -->
             <?php if ($next_class): ?>
-                <div class="next-class-banner fade-in">
+                <div class="next-class-banner">
                     <div class="next-class-header">
                         <div class="next-class-icon">
                             <i class="bi bi-clock"></i>
                         </div>
                         <div class="next-class-info">
-                            <h4>Your Next Class</h4>
+                            <h4>Next Class</h4>
                             <p><?= htmlspecialchars($next_class['title']) ?> with <?= htmlspecialchars($next_class['instructor_name']) ?></p>
                         </div>
                     </div>
@@ -1238,22 +1106,8 @@ if (isset($_SESSION['success_msg'])) {
                 </div>
             <?php endif; ?>
             
-            <!-- Welcome Banner -->
-            <div class="welcome-banner fade-in">
-                <div class="banner-content">
-                    <h2>Welcome to Your Dashboard!</h2>
-                    <p>Track your progress, book new classes, and manage your swimming journey all in one place.</p>
-                    <div class="date-time">
-                        <i class="bi bi-calendar-check me-2"></i>
-                        <span id="currentDate"><?= $current_date ?></span>
-                        <i class="bi bi-clock ms-3 me-2"></i>
-                        <span id="currentTime"><?= $current_time ?></span>
-                    </div>
-                </div>
-            </div>
-            
             <!-- Stats Cards -->
-            <div class="stats-grid fade-in">
+            <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class="bi bi-ticket-perforated"></i>
@@ -1297,7 +1151,7 @@ if (isset($_SESSION['success_msg'])) {
                 <!-- Left Column -->
                 <div class="left-column">
                     <!-- Upcoming Classes -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Upcoming Classes</h3>
                             <a href="my-bookings.php" class="btn-link">
@@ -1310,17 +1164,15 @@ if (isset($_SESSION['success_msg'])) {
                                     <i class="bi bi-calendar-x"></i>
                                     <h5>No Upcoming Classes</h5>
                                     <p>You don't have any upcoming classes booked.</p>
-                                    <a href="classes.php" class="btn btn-primary">Browse Classes</a>
+                                    <a href="classes.php" class="btn btn-primary btn-sm">Browse Classes</a>
                                 </div>
                             <?php else: ?>
                                 <div class="class-list">
-                                    <?php foreach ($upcoming_classes_list as $class): 
-                                        $has_end_time = !empty($class['end_time']) && $class['end_time'] != '0000-00-00 00:00:00';
-                                    ?>
+                                    <?php foreach ($upcoming_classes_list as $class): ?>
                                         <div class="class-item">
                                             <div class="class-time">
                                                 <div class="class-date">
-                                                    <?= date('D, M j', strtotime($class['start_time'])) ?>
+                                                    <?= date('M j', strtotime($class['start_time'])) ?>
                                                 </div>
                                                 <div class="class-hour">
                                                     <?= date('g:i A', strtotime($class['start_time'])) ?>
@@ -1344,9 +1196,9 @@ if (isset($_SESSION['success_msg'])) {
                     </div>
                     
                     <!-- Recommended Classes -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
-                            <h3>Recommended Classes</h3>
+                            <h3>Available Classes</h3>
                             <a href="classes.php" class="btn-link">
                                 Browse All <i class="bi bi-arrow-right"></i>
                             </a>
@@ -1372,17 +1224,12 @@ if (isset($_SESSION['success_msg'])) {
                                                     <span><i class="bi bi-person"></i> <?= htmlspecialchars($class['instructor_name']) ?></span>
                                                     <span><i class="bi bi-clock"></i> <?= date('M j, g:i A', strtotime($class['start_time'])) ?></span>
                                                 </div>
-                                                <?php if (!empty($class['specialization'])): ?>
-                                                    <p class="text-muted" style="font-size: 12px; margin-bottom: 10px;">
-                                                        <i class="bi bi-star"></i> <?= htmlspecialchars($class['specialization']) ?>
-                                                    </p>
-                                                <?php endif; ?>
                                                 <div class="class-actions">
                                                     <div class="slots-info">
-                                                        <strong><?= $class['slots_available'] ?></strong> slots available
+                                                        <?= $class['slots_available'] ?> slots available
                                                     </div>
-                                                    <a href="classes.php" class="btn btn-sm btn-primary">
-                                                        View Details
+                                                    <a href="classes.php" class="btn btn-primary btn-sm">
+                                                        View
                                                     </a>
                                                 </div>
                                             </div>
@@ -1397,23 +1244,23 @@ if (isset($_SESSION['success_msg'])) {
                 <!-- Right Column -->
                 <div class="right-column">
                     <!-- Student Level -->
-                    <div class="level-card fade-in">
+                    <div class="level-card">
                         <div class="level-header">
                             <div class="level-icon">
                                 <i class="bi bi-award"></i>
                             </div>
                             <div class="level-content">
-                                <h4>Swimming Progress</h4>
-                                <p>Keep up the great work!</p>
+                                <h4>Your Progress</h4>
+                                <p><?= $total_bookings ?> classes booked</p>
                             </div>
                         </div>
                         <div class="text-center">
-                            <span class="level-badge"><?= $total_bookings ?> Classes Booked</span>
+                            <span class="level-badge">Active Student</span>
                         </div>
                     </div>
                     
                     <!-- Recent Payments -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Recent Payments</h3>
                             <a href="payments.php" class="btn-link">
@@ -1450,13 +1297,13 @@ if (isset($_SESSION['success_msg'])) {
                     </div>
                     
                     <!-- Progress Tracking -->
-                    <div class="progress-card fade-in">
+                    <div class="progress-card">
                         <div class="progress-header">
                             <div class="progress-icon">
                                 <i class="bi bi-graph-up-arrow"></i>
                             </div>
                             <div class="progress-content">
-                                <h4>Attendance Progress</h4>
+                                <h4>Attendance</h4>
                                 <p>Last 30 days</p>
                             </div>
                         </div>
@@ -1475,22 +1322,22 @@ if (isset($_SESSION['success_msg'])) {
                         </div>
                         <div class="d-flex justify-content-between mt-3">
                             <div class="text-center">
-                                <div class="h4 fw-bold"><?= $attendance_stats['total_classes'] ?></div>
-                                <small>Total Classes</small>
+                                <div class="h5 fw-bold"><?= $attendance_stats['total_classes'] ?></div>
+                                <small>Total</small>
                             </div>
                             <div class="text-center">
-                                <div class="h4 fw-bold text-success"><?= $attendance_stats['attended_classes'] ?></div>
+                                <div class="h5 fw-bold"><?= $attendance_stats['attended_classes'] ?></div>
                                 <small>Attended</small>
                             </div>
                             <div class="text-center">
-                                <div class="h4 fw-bold text-primary"><?= $attendance_stats['upcoming_classes'] ?></div>
+                                <div class="h5 fw-bold"><?= $attendance_stats['upcoming_classes'] ?></div>
                                 <small>Upcoming</small>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Quick Actions -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Quick Actions</h3>
                         </div>
@@ -1510,7 +1357,7 @@ if (isset($_SESSION['success_msg'])) {
                                 </a>
                                 <a href="profile.php" class="action-btn">
                                     <i class="bi bi-gear"></i>
-                                    <span>Profile Settings</span>
+                                    <span>Profile</span>
                                 </a>
                             </div>
                         </div>
@@ -1565,113 +1412,6 @@ if (isset($_SESSION['success_msg'])) {
             updateCountdown();
             setInterval(updateCountdown, 1000);
             <?php endif; ?>
-            
-            // Update date and time in real-time
-            function updateDateTime() {
-                const now = new Date();
-                
-                // Format date
-                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-                const dateString = now.toLocaleDateString('en-US', options);
-                
-                // Format time
-                const timeString = now.toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                    hour12: true 
-                });
-                
-                // Update elements
-                const dateElement = document.getElementById('currentDate');
-                const timeElement = document.getElementById('currentTime');
-                
-                if (dateElement) dateElement.textContent = dateString;
-                if (timeElement) timeElement.textContent = timeString;
-            }
-            
-            updateDateTime();
-            setInterval(updateDateTime, 1000);
-            
-            // Update greeting based on time of day
-            function updateGreeting() {
-                const hour = new Date().getHours();
-                let greeting = 'Good ';
-                
-                if (hour < 12) greeting += 'Morning';
-                else if (hour < 18) greeting += 'Afternoon';
-                else greeting += 'Evening';
-                
-                const userName = "<?= htmlspecialchars($user['name'] ?? 'Student') ?>";
-                const header = document.getElementById('greeting');
-                if (header) {
-                    header.innerHTML = `${greeting}, ${userName}! <span class="wave">👋</span>`;
-                }
-            }
-            
-            updateGreeting();
-            
-            // Animate progress bars on scroll
-            const observerOptions = {
-                threshold: 0.5
-            };
-            
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const progressFill = entry.target.querySelector('.progress-fill');
-                        if (progressFill) {
-                            const width = progressFill.style.width;
-                            progressFill.style.width = '0';
-                            setTimeout(() => {
-                                progressFill.style.width = width;
-                            }, 300);
-                        }
-                    }
-                });
-            }, observerOptions);
-            
-            document.querySelectorAll('.progress-card').forEach(card => {
-                observer.observe(card);
-            });
-            
-            // Add fade-in animation to cards
-            const cards = document.querySelectorAll('.fade-in');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.1}s`;
-            });
-            
-            // Add hover effect to stat cards
-            document.querySelectorAll('.stat-card').forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-5px)';
-                });
-                
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                });
-            });
-            
-            // Add count-up animation to stats
-            const statValues = document.querySelectorAll('.stat-content h3');
-            statValues.forEach(stat => {
-                const target = parseInt(stat.textContent.replace('$', '').replace(',', ''));
-                let current = 0;
-                const increment = Math.ceil(target / 20);
-                
-                const timer = setInterval(() => {
-                    current += increment;
-                    if (current >= target) {
-                        current = target;
-                        clearInterval(timer);
-                    }
-                    // Format number with commas and add $ back for payment
-                    if (stat.textContent.includes('$')) {
-                        stat.textContent = '$' + current.toLocaleString();
-                    } else {
-                        stat.textContent = current.toLocaleString();
-                    }
-                }, 50);
-            });
             
             // Auto-hide alerts after 5 seconds
             document.querySelectorAll('.alert').forEach(alert => {

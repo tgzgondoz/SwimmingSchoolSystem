@@ -157,7 +157,6 @@ if ($stmt) {
     $classes = $result->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
 } else {
-    // Log the error for debugging
     error_log("Database query error: " . $conn->error);
     $error_msg = "Unable to load classes. Please try again later.";
 }
@@ -185,30 +184,10 @@ if ($user_stmt) {
     <title>Book Classes | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --aqua: #0dcaf0;
-            --blue-light: #e7f1ff;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8f9fa;
             color: #333;
         }
         
@@ -221,7 +200,7 @@ if ($user_stmt) {
         .sidebar {
             width: 260px;
             background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            border-right: 1px solid #dee2e6;
             position: fixed;
             top: 0;
             left: 0;
@@ -232,7 +211,7 @@ if ($user_stmt) {
         
         .logo-area {
             padding: 0 25px 25px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #dee2e6;
             margin-bottom: 20px;
         }
         
@@ -241,14 +220,14 @@ if ($user_stmt) {
             align-items: center;
             gap: 12px;
             text-decoration: none;
-            color: var(--dark);
+            color: #212529;
         }
         
         .logo-icon {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
-            border-radius: 10px;
+            background: #0d6efd;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -257,12 +236,10 @@ if ($user_stmt) {
         }
         
         .logo-text h3 {
-            font-weight: 700;
-            font-size: 22px;
+            font-weight: 600;
+            font-size: 18px;
             margin: 0;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #0d6efd;
         }
         
         .logo-text span {
@@ -283,29 +260,27 @@ if ($user_stmt) {
             align-items: center;
             gap: 12px;
             padding: 12px 15px;
-            border-radius: 10px;
+            border-radius: 8px;
             color: #495057;
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
         
         .nav-link:hover {
-            background: var(--blue-light);
-            color: var(--primary);
-            transform: translateX(5px);
+            background: #e9ecef;
+            color: #0d6efd;
         }
         
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: #0d6efd;
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
         }
         
         .nav-link i {
             width: 20px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .logout-section {
@@ -313,7 +288,7 @@ if ($user_stmt) {
             position: absolute;
             bottom: 0;
             width: 100%;
-            border-top: 1px solid #eee;
+            border-top: 1px solid #dee2e6;
         }
         
         /* Main Content */
@@ -326,135 +301,117 @@ if ($user_stmt) {
         /* Header */
         .header {
             background: white;
-            border-radius: 15px;
-            padding: 25px 30px;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
+            font-size: 24px;
+            font-weight: 600;
             margin-bottom: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--aqua));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #212529;
         }
         
         .header-left p {
             color: #6c757d;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-profile {
             display: flex;
             align-items: center;
             gap: 15px;
-            background: var(--light);
-            padding: 12px 20px;
-            border-radius: 10px;
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 8px;
         }
         
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 40px;
+            height: 40px;
+            background: #6c757d;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 16px;
         }
         
         .user-info h5 {
             font-weight: 600;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-info p {
             color: #6c757d;
-            font-size: 14px;
+            font-size: 12px;
             margin: 0;
         }
         
         /* Alerts */
         .alert-custom {
-            border-radius: 12px;
+            border-radius: 8px;
             border: none;
-            padding: 20px 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            animation: slideIn 0.5s ease;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            padding: 15px 20px;
+            margin-bottom: 20px;
         }
         
         /* Filter Panel */
         .filter-panel {
             background: white;
-            border-radius: 15px;
-            padding: 25px;
+            border-radius: 10px;
+            padding: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border: 1px solid #dee2e6;
         }
         
         .filter-header {
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         
         .filter-icon {
-            width: 50px;
-            height: 50px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
-            border-radius: 12px;
+            width: 40px;
+            height: 40px;
+            background: #0d6efd;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 22px;
+            font-size: 18px;
         }
         
         .filter-header h3 {
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 600;
             margin: 0;
         }
         
         .filter-form .form-label {
-            font-weight: 600;
+            font-weight: 500;
             color: #495057;
             margin-bottom: 8px;
+            font-size: 14px;
         }
         
         .filter-form .form-control,
         .filter-form .form-select {
-            padding: 12px 15px;
-            border: 2px solid #e9ecef;
-            border-radius: 10px;
-            transition: all 0.3s;
-        }
-        
-        .filter-form .form-control:focus,
-        .filter-form .form-select:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+            padding: 10px 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
         }
         
         .filter-actions {
@@ -463,100 +420,75 @@ if ($user_stmt) {
             margin-top: 20px;
         }
         
-        .btn-primary-custom {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border: none;
-            border-radius: 10px;
-            padding: 12px 25px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(13, 110, 253, 0.3);
-        }
-        
-        .btn-outline-custom {
-            background: white;
-            color: var(--primary);
-            border: 2px solid var(--primary);
-            border-radius: 10px;
-            padding: 12px 25px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .btn-outline-custom:hover {
-            background: var(--primary);
-            color: white;
-            transform: translateY(-2px);
-        }
-        
-        /* Classes Grid */
+        /* Classes Header */
         .classes-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
         
         .classes-header h2 {
-            font-size: 26px;
+            font-size: 20px;
             font-weight: 600;
             margin: 0;
         }
         
         .classes-count {
-            background: var(--blue-light);
-            color: var(--primary);
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: 600;
+            background: #e9ecef;
+            color: #495057;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
         }
         
+        /* Classes Grid */
         .classes-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 25px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .classes-grid {
+                grid-template-columns: 1fr;
+            }
         }
         
         /* Class Card */
         .class-card {
             background: white;
-            border-radius: 15px;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s ease;
             overflow: hidden;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
         }
         
         .class-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         
         .class-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--aqua) 100%);
-            padding: 20px;
+            background: #0d6efd;
+            padding: 15px;
             color: white;
             position: relative;
         }
         
         .class-badge {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 15px;
+            right: 15px;
             background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            padding: 6px 15px;
-            border-radius: 20px;
+            padding: 4px 10px;
+            border-radius: 4px;
             font-size: 12px;
-            font-weight: 600;
+            font-weight: 500;
         }
         
         .class-title {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
             margin-bottom: 5px;
         }
@@ -565,52 +497,65 @@ if ($user_stmt) {
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-top: 15px;
+            margin-top: 10px;
         }
         
         .instructor-avatar {
-            width: 40px;
-            height: 40px;
+            width: 35px;
+            height: 35px;
             background: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--primary);
-            font-weight: 600;
+            color: #0d6efd;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         .instructor-info h6 {
             margin: 0;
-            font-size: 14px;
+            font-size: 13px;
             color: rgba(255,255,255,0.9);
         }
         
         .instructor-info p {
             margin: 0;
-            font-size: 12px;
+            font-size: 11px;
             color: rgba(255,255,255,0.7);
         }
         
         .class-content {
-            padding: 25px;
+            padding: 20px;
+        }
+        
+        .slots-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #495057;
+            margin-bottom: 15px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
         }
         
         .class-details {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .detail-item {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 12px;
-            font-size: 14px;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 13px;
         }
         
         .detail-item i {
-            color: var(--primary);
-            width: 20px;
+            color: #0d6efd;
+            width: 16px;
             text-align: center;
         }
         
@@ -618,50 +563,38 @@ if ($user_stmt) {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding-top: 20px;
-            border-top: 1px solid #e9ecef;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
         }
         
         .class-price {
-            font-size: 24px;
-            font-weight: 700;
-            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+            color: #0d6efd;
         }
         
         .class-price small {
-            font-size: 14px;
+            font-size: 12px;
             color: #6c757d;
-            font-weight: 500;
-        }
-        
-        .slots-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            color: #6c757d;
-            margin-bottom: 15px;
-            padding: 8px 15px;
-            background: var(--light);
-            border-radius: 8px;
+            font-weight: 400;
         }
         
         .btn-book {
-            background: linear-gradient(135deg, var(--success) 0%, #157347 100%);
+            background: #198754;
             color: white;
             border: none;
-            border-radius: 10px;
-            padding: 12px 25px;
-            font-weight: 600;
-            transition: all 0.3s;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 500;
+            font-size: 14px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            transition: all 0.2s ease;
         }
         
         .btn-book:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(25, 135, 84, 0.3);
+            background: #157347;
         }
         
         .btn-book:disabled {
@@ -670,30 +603,26 @@ if ($user_stmt) {
         }
         
         .btn-booked {
-            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-        }
-        
-        .btn-pending {
-            background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%);
+            background: #6c757d;
         }
         
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 40px 20px;
             background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
         }
         
         .empty-state-icon {
-            font-size: 80px;
+            font-size: 48px;
             color: #dee2e6;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         
         .empty-state h3 {
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 600;
             margin-bottom: 10px;
             color: #495057;
@@ -702,61 +631,11 @@ if ($user_stmt) {
         .empty-state p {
             color: #6c757d;
             max-width: 400px;
-            margin: 0 auto 25px;
-        }
-        
-        /* Loading Overlay */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-        }
-        
-        .loading-spinner {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
             margin: 0 auto 20px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Toast Notifications */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9998;
+            font-size: 14px;
         }
         
         /* Responsive */
-        @media (max-width: 1200px) {
-            .classes-grid {
-                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            }
-        }
-        
         @media (max-width: 992px) {
             .sidebar {
                 width: 70px;
@@ -777,34 +656,42 @@ if ($user_stmt) {
         
         @media (max-width: 768px) {
             .main-content {
-                padding: 20px;
+                padding: 15px;
             }
             
             .header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 10px;
                 text-align: center;
-            }
-            
-            .classes-grid {
-                grid-template-columns: 1fr;
+                padding: 15px;
             }
             
             .filter-form .row > div {
                 margin-bottom: 15px;
             }
+            
+            .user-profile {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .classes-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .filter-actions {
+                flex-direction: column;
+            }
+            
+            .filter-actions .btn {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p class="mt-3">Processing your booking...</p>
-        </div>
-    </div>
-    
     <div class="dashboard-container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -814,7 +701,7 @@ if ($user_stmt) {
                         <i class="bi bi-droplet"></i>
                     </div>
                     <div class="logo-text">
-                        <h3>Elite Swimming Academy</h3>
+                        <h3>Elite Swimming</h3>
                         <span>Student Portal</span>
                     </div>
                 </a>
@@ -868,8 +755,8 @@ if ($user_stmt) {
             <!-- Header -->
             <header class="header">
                 <div class="header-left">
-                    <h1>Book Swimming Classes</h1>
-                    <p>Discover and book available swimming classes</p>
+                    <h1>Book Classes</h1>
+                    <p>Find and book swimming classes</p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
@@ -945,11 +832,11 @@ if ($user_stmt) {
                     </div>
                     
                     <div class="filter-actions">
-                        <button type="submit" class="btn btn-primary-custom">
+                        <button type="submit" class="btn btn-primary">
                             <i class="bi bi-funnel me-2"></i>Apply Filters
                         </button>
-                        <a href="classes.php" class="btn btn-outline-custom">
-                            <i class="bi bi-arrow-clockwise me-2"></i>Clear Filters
+                        <a href="classes.php" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise me-2"></i>Clear
                         </a>
                     </div>
                 </form>
@@ -970,8 +857,8 @@ if ($user_stmt) {
                             <i class="bi bi-calendar-x"></i>
                         </div>
                         <h3>No Classes Available</h3>
-                        <p>There are no classes matching your filters at the moment. Please try different filters or check back later.</p>
-                        <a href="classes.php" class="btn btn-primary-custom">
+                        <p>There are no classes matching your filters at the moment.</p>
+                        <a href="classes.php" class="btn btn-primary">
                             <i class="bi bi-arrow-clockwise me-2"></i>View All Classes
                         </a>
                     </div>
@@ -982,9 +869,6 @@ if ($user_stmt) {
                             $end_time = strtotime($class['end_time']);
                             $duration = ($end_time - $start_time) / 60;
                             $already_booked = $class['already_booked'] > 0;
-                            $slots_percentage = ($class['slots_available'] / $class['slots_total']) * 100;
-                            
-                            // Check if the end_time is valid (not 0000-00-00 00:00:00)
                             $has_end_time = !empty($class['end_time']) && $class['end_time'] != '0000-00-00 00:00:00';
                         ?>
                             <div class="class-card">
@@ -1010,9 +894,6 @@ if ($user_stmt) {
                                     <div class="slots-info">
                                         <i class="bi bi-people"></i>
                                         <span><?= $class['slots_available'] ?> of <?= $class['slots_total'] ?> slots available</span>
-                                        <?php if ($slots_percentage < 30): ?>
-                                            <span class="badge bg-danger ms-2">Filling Fast</span>
-                                        <?php endif; ?>
                                     </div>
                                     
                                     <div class="class-details">
@@ -1035,12 +916,6 @@ if ($user_stmt) {
                                                 <span><?= $duration ?> minutes</span>
                                             </div>
                                         <?php endif; ?>
-                                        <?php if (!empty($class['description'])): ?>
-                                            <p class="mt-3 text-muted" style="font-size: 14px;">
-                                                <?= htmlspecialchars(substr($class['description'], 0, 120)) ?>
-                                                <?= strlen($class['description']) > 120 ? '...' : '' ?>
-                                            </p>
-                                        <?php endif; ?>
                                     </div>
                                     
                                     <div class="class-footer">
@@ -1052,12 +927,12 @@ if ($user_stmt) {
                                         <?php if ($already_booked): ?>
                                             <button class="btn-book btn-booked" disabled>
                                                 <i class="bi bi-check-circle"></i>
-                                                Already Booked
+                                                Booked
                                             </button>
                                         <?php elseif ($class['slots_available'] <= 0): ?>
                                             <button class="btn-book" disabled>
                                                 <i class="bi bi-x-circle"></i>
-                                                Fully Booked
+                                                Full
                                             </button>
                                         <?php else: ?>
                                             <form method="POST" class="booking-form" onsubmit="return confirmBooking(this)">
@@ -1065,7 +940,7 @@ if ($user_stmt) {
                                                 <input type="hidden" name="class_id" value="<?= $class['id'] ?>">
                                                 <button type="submit" class="btn-book">
                                                     <i class="bi bi-calendar-plus"></i>
-                                                    Book Now
+                                                    Book
                                                 </button>
                                             </form>
                                         <?php endif; ?>
@@ -1081,62 +956,15 @@ if ($user_stmt) {
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Show loading overlay
-        function showLoading() {
-            document.getElementById('loadingOverlay').style.display = 'flex';
-        }
-        
-        // Hide loading overlay
-        function hideLoading() {
-            document.getElementById('loadingOverlay').style.display = 'none';
-        }
-        
         // Confirm booking
         function confirmBooking(form) {
             const classTitle = form.closest('.class-card').querySelector('.class-title').textContent;
             
-            if (!confirm(`Are you sure you want to book "${classTitle}"?\n\nThis will reserve one slot for you.`)) {
+            if (!confirm(`Book "${classTitle}"?\n\nThis will reserve one slot for you.`)) {
                 return false;
             }
             
-            showLoading();
-            
-            // Submit form via AJAX
-            fetch('', {
-                method: 'POST',
-                body: new FormData(form),
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.text())
-            .then(html => {
-                hideLoading();
-                
-                // Check if response contains success
-                if (html.includes('alert-success') || html.includes('Successfully booked')) {
-                    // Reload page to show updated status
-                    window.location.reload();
-                } else {
-                    // Parse HTML to extract error message
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const errorAlert = doc.querySelector('.alert-danger');
-                    
-                    if (errorAlert) {
-                        alert('Booking failed: ' + errorAlert.textContent.trim());
-                    } else {
-                        alert('Booking failed. Please try again.');
-                    }
-                }
-            })
-            .catch(error => {
-                hideLoading();
-                console.error('Error:', error);
-                alert('Network error. Please check your connection and try again.');
-            });
-            
-            return false; // Prevent default form submission
+            return true;
         }
         
         // Update min date for date filter
@@ -1145,13 +973,6 @@ if ($user_stmt) {
             if (dateInput) {
                 dateInput.min = new Date().toISOString().split('T')[0];
             }
-            
-            // Add fade-in animation to cards
-            const cards = document.querySelectorAll('.class-card');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.1}s`;
-                card.classList.add('animate__animated', 'animate__fadeIn');
-            });
         });
         
         // Auto-hide alerts after 5 seconds
