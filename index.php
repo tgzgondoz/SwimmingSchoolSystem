@@ -759,7 +759,7 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                 <div class="col-lg-2 footer-section">
                     <h5>Quick Links</h5>
                     <ul class="footer-links">
-                        <li><a href="#home">Home</a></li>
+                        <li><a href="#home">Home.</a></li>
                         <li><a href="#about">About Us</a></li>
                         <li><a href="#classes">Classes</a></li>
                         <li><a href="#contact">Contact</a></li>
