@@ -2,6 +2,18 @@
 // admin/bookings.php - Admin Booking Management
 session_start();
 
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', __DIR__ . '/../logs/php_errors.log');
+
+// Create logs directory if it doesn't exist
+$log_dir = __DIR__ . '/../logs';
+if (!is_dir($log_dir)) {
+    mkdir($log_dir, 0755, true);
+}
+
 // CSRF Token Generation
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -9,6 +21,11 @@ if (empty($_SESSION['csrf_token'])) {
 
 require_once __DIR__ . '/../inc/db.php';
 require_once __DIR__ . '/../inc/functions.php';
+
+// Check database connection
+if (!$conn || $conn->connect_error) {
+    die("Database connection failed: " . ($conn ? $conn->connect_error : "No connection"));
+}
 
 // Rate Limiting
 $now = time();
@@ -32,6 +49,41 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 $admin_id = $_SESSION['user_id'];
 $success_msg = '';
 $error_msg = '';
+
+// Function to check database structure
+function checkDatabaseStructure($conn) {
+    $required_tables = ['bookings', 'users', 'classes', 'payments', 'settings'];
+    $errors = [];
+    
+    foreach ($required_tables as $table) {
+        $result = $conn->query("SHOW TABLES LIKE '$table'");
+        if ($result->num_rows == 0) {
+            $errors[] = "Table '$table' not found.";
+        }
+    }
+    
+    // Check bookings table columns
+    $columns = $conn->query("SHOW COLUMNS FROM bookings");
+    $booking_columns = [];
+    while ($col = $columns->fetch_assoc()) {
+        $booking_columns[] = $col['Field'];
+    }
+    
+    $required_columns = ['id', 'user_id', 'class_id', 'status'];
+    foreach ($required_columns as $col) {
+        if (!in_array($col, $booking_columns)) {
+            $errors[] = "Column '$col' not found in bookings table.";
+        }
+    }
+    
+    return $errors;
+}
+
+// Check database structure
+$db_errors = checkDatabaseStructure($conn);
+if (!empty($db_errors)) {
+    error_log("Database structure errors: " . implode(", ", $db_errors));
+}
 
 // Function to send email notifications
 function sendBookingNotification($conn, $booking_id, $action) {
@@ -427,46 +479,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif (isset($_POST['delete_booking'])) {
         $booking_id = intval($_POST['booking_id'] ?? 0);
         
+        error_log("Delete booking attempt - Booking ID: $booking_id"); // Debug log
+        
         try {
-            // Check if booking exists
-            $check_stmt = $conn->prepare("SELECT class_id FROM bookings WHERE id = ? AND status = 'confirmed'");
-            $check_stmt->bind_param("i", $booking_id);
-            $check_stmt->execute();
-            $check_result = $check_stmt->get_result();
-            
-            if ($check_result->num_rows > 0) {
-                // If confirmed booking, increase available slots
-                $row = $check_result->fetch_assoc();
-                $slot_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available + 1 WHERE id = ?");
-                $slot_stmt->bind_param("i", $row['class_id']);
-                $slot_stmt->execute();
-                $slot_stmt->close();
-            }
-            $check_stmt->close();
-            
-            // Get booking info for logging
-            $info_stmt = $conn->prepare("SELECT user_id, class_id FROM bookings WHERE id = ?");
-            $info_stmt->bind_param("i", $booking_id);
-            $info_stmt->execute();
-            $info_result = $info_stmt->get_result();
-            $booking_info = $info_result->fetch_assoc();
-            $info_stmt->close();
-            
-            // Delete the booking
-            $delete_stmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
-            $delete_stmt->bind_param("i", $booking_id);
-            
-            if ($delete_stmt->execute()) {
-                // Log activity
-                if ($booking_info) {
-                    logActivity($conn, $admin_id, 'Booking Deleted', "Deleted booking ID: $booking_id (Student: {$booking_info['user_id']}, Class: {$booking_info['class_id']})");
-                }
-                
-                $success_msg = "Booking deleted successfully!";
+            // Check if booking exists first
+            $check_stmt = $conn->prepare("SELECT class_id, status FROM bookings WHERE id = ?");
+            if (!$check_stmt) {
+                error_log("Prepare failed: " . $conn->error);
+                $error_msg = "Database error. Please try again.";
             } else {
-                $error_msg = "Failed to delete booking.";
+                $check_stmt->bind_param("i", $booking_id);
+                if (!$check_stmt->execute()) {
+                    error_log("Execute failed: " . $check_stmt->error);
+                    $error_msg = "Failed to check booking.";
+                } else {
+                    $check_result = $check_stmt->get_result();
+                    
+                    if ($check_result->num_rows > 0) {
+                        $row = $check_result->fetch_assoc();
+                        $class_id = $row['class_id'];
+                        $status = $row['status'];
+                        
+                        error_log("Booking found - Class ID: $class_id, Status: $status"); // Debug
+                        
+                        // If confirmed booking, increase available slots
+                        if ($status === 'confirmed') {
+                            error_log("Restoring slots for class: $class_id"); // Debug
+                            $slot_stmt = $conn->prepare("UPDATE classes SET slots_available = slots_available + 1 WHERE id = ?");
+                            if ($slot_stmt) {
+                                $slot_stmt->bind_param("i", $class_id);
+                                $slot_stmt->execute();
+                                $slot_stmt->close();
+                            } else {
+                                error_log("Slot update prepare failed: " . $conn->error);
+                            }
+                        }
+                        
+                        // Get booking info for logging
+                        $info_stmt = $conn->prepare("SELECT user_id, class_id FROM bookings WHERE id = ?");
+                        $info_stmt->bind_param("i", $booking_id);
+                        $info_stmt->execute();
+                        $info_result = $info_stmt->get_result();
+                        $booking_info = $info_result->fetch_assoc();
+                        $info_stmt->close();
+                        
+                        // Delete the booking
+                        $delete_stmt = $conn->prepare("DELETE FROM bookings WHERE id = ?");
+                        if (!$delete_stmt) {
+                            error_log("Delete prepare failed: " . $conn->error);
+                            $error_msg = "Database error. Please try again.";
+                        } else {
+                            $delete_stmt->bind_param("i", $booking_id);
+                            
+                            if ($delete_stmt->execute()) {
+                                // Log activity
+                                if ($booking_info) {
+                                    logActivity($conn, $admin_id, 'Booking Deleted', "Deleted booking ID: $booking_id");
+                                }
+                                
+                                $success_msg = "Booking deleted successfully!";
+                                error_log("Booking deleted successfully - ID: $booking_id"); // Debug
+                            } else {
+                                error_log("Delete execute failed: " . $delete_stmt->error);
+                                $error_msg = "Failed to delete booking. Database error.";
+                            }
+                            $delete_stmt->close();
+                        }
+                    } else {
+                        $error_msg = "Booking not found.";
+                        error_log("Booking not found - ID: $booking_id"); // Debug
+                    }
+                }
+                $check_stmt->close();
             }
-            $delete_stmt->close();
         } catch (Exception $e) {
             error_log("Booking deletion error: " . $e->getMessage());
             $error_msg = "An error occurred while deleting the booking.";
@@ -1538,6 +1623,20 @@ $current_date = date('l, F j, Y');
                 </div>
             </header>
             
+            <!-- Debug Info -->
+            <?php if (!empty($db_errors)): ?>
+                <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Database Issues Found:</strong>
+                    <ul class="mb-0">
+                        <?php foreach ($db_errors as $error): ?>
+                            <li><?= htmlspecialchars($error) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            
             <!-- Alerts -->
             <?php if ($success_msg): ?>
                 <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
@@ -2169,69 +2268,89 @@ $current_date = date('l, F j, Y');
         document.addEventListener('DOMContentLoaded', function() {
             // Edit booking function
             window.editBooking = function(booking) {
-                document.getElementById('edit_booking_id').value = booking.id;
-                document.getElementById('edit_user_id').value = booking.user_id;
-                document.getElementById('edit_class_id').value = booking.class_id;
-                document.getElementById('edit_child_name').value = booking.child_name || '';
-                document.getElementById('edit_child_age').value = booking.child_age || '';
-                document.getElementById('edit_child_gender').value = booking.child_gender || '';
-                document.getElementById('edit_special_notes').value = booking.special_notes || '';
-                document.getElementById('edit_status').value = booking.status;
-                document.getElementById('edit_payment_status').value = booking.payment_status || 'pending';
-                document.getElementById('edit_payment_method').value = booking.payment_method || '';
+                try {
+                    if (!booking || !booking.id) {
+                        alert('Invalid booking data');
+                        return;
+                    }
+                    
+                    document.getElementById('edit_booking_id').value = booking.id;
+                    document.getElementById('edit_user_id').value = booking.user_id || '';
+                    document.getElementById('edit_class_id').value = booking.class_id || '';
+                    document.getElementById('edit_child_name').value = booking.child_name || '';
+                    document.getElementById('edit_child_age').value = booking.child_age || '';
+                    document.getElementById('edit_child_gender').value = booking.child_gender || '';
+                    document.getElementById('edit_special_notes').value = booking.special_notes || '';
+                    document.getElementById('edit_status').value = booking.status || 'pending';
+                    document.getElementById('edit_payment_status').value = booking.payment_status || 'pending';
+                    document.getElementById('edit_payment_method').value = booking.payment_method || '';
+                } catch (error) {
+                    console.error('Error in editBooking:', error);
+                    alert('Error loading booking data');
+                }
             }
             
             // View booking function
             window.viewBooking = function(booking) {
-                document.getElementById('view_booking_id').textContent = '#' + booking.id.toString().padStart(5, '0');
-                document.getElementById('view_created_at').textContent = new Date(booking.created_at).toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                document.getElementById('view_student_name').textContent = booking.student_name;
-                document.getElementById('view_student_email').textContent = booking.student_email;
-                document.getElementById('view_class_name').textContent = booking.class_name;
-                document.getElementById('view_class_time').textContent = new Date(booking.class_time).toLocaleString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                document.getElementById('view_child_name').textContent = booking.child_name || 'Self';
-                document.getElementById('view_child_age').textContent = booking.child_age || 'N/A';
-                document.getElementById('view_child_gender').textContent = booking.child_gender ? booking.child_gender.charAt(0).toUpperCase() + booking.child_gender.slice(1) : 'N/A';
-                
-                // Status with badge
-                const statusText = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
-                let statusClass = 'badge-secondary';
-                switch(booking.status) {
-                    case 'pending': statusClass = 'badge-warning'; break;
-                    case 'confirmed': statusClass = 'badge-success'; break;
-                    case 'cancelled': statusClass = 'badge-danger'; break;
-                    case 'rejected': statusClass = 'badge-secondary'; break;
-                    case 'completed': statusClass = 'badge-info'; break;
+                try {
+                    if (!booking || !booking.id) {
+                        alert('Invalid booking data');
+                        return;
+                    }
+                    
+                    document.getElementById('view_booking_id').textContent = '#' + booking.id.toString().padStart(5, '0');
+                    document.getElementById('view_created_at').textContent = new Date(booking.created_at).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    document.getElementById('view_student_name').textContent = booking.student_name;
+                    document.getElementById('view_student_email').textContent = booking.student_email;
+                    document.getElementById('view_class_name').textContent = booking.class_name;
+                    document.getElementById('view_class_time').textContent = new Date(booking.class_time).toLocaleString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    document.getElementById('view_child_name').textContent = booking.child_name || 'Self';
+                    document.getElementById('view_child_age').textContent = booking.child_age || 'N/A';
+                    document.getElementById('view_child_gender').textContent = booking.child_gender ? booking.child_gender.charAt(0).toUpperCase() + booking.child_gender.slice(1) : 'N/A';
+                    
+                    // Status with badge
+                    const statusText = booking.status.charAt(0).toUpperCase() + booking.status.slice(1);
+                    let statusClass = 'badge-secondary';
+                    switch(booking.status) {
+                        case 'pending': statusClass = 'badge-warning'; break;
+                        case 'confirmed': statusClass = 'badge-success'; break;
+                        case 'cancelled': statusClass = 'badge-danger'; break;
+                        case 'rejected': statusClass = 'badge-secondary'; break;
+                        case 'completed': statusClass = 'badge-info'; break;
+                    }
+                    document.getElementById('view_status').innerHTML = `<span class="badge ${statusClass}">${statusText}</span>`;
+                    
+                    // Payment status
+                    const paymentStatus = booking.payment_status || 'pending';
+                    const paymentStatusText = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
+                    let paymentStatusClass = 'badge-secondary';
+                    switch(paymentStatus) {
+                        case 'pending': paymentStatusClass = 'badge-warning'; break;
+                        case 'paid': paymentStatusClass = 'badge-success'; break;
+                        case 'failed': paymentStatusClass = 'badge-danger'; break;
+                    }
+                    document.getElementById('view_payment_status').innerHTML = `<span class="badge ${paymentStatusClass}">${paymentStatusText}</span>`;
+                    
+                    document.getElementById('view_payment_amount').textContent = booking.payment_amount ? '$' + parseFloat(booking.payment_amount).toFixed(2) : 'N/A';
+                    document.getElementById('view_payment_method').textContent = booking.payment_method || 'N/A';
+                    document.getElementById('view_special_notes').textContent = booking.special_notes || 'None';
+                } catch (error) {
+                    console.error('Error in viewBooking:', error);
+                    alert('Error loading booking details');
                 }
-                document.getElementById('view_status').innerHTML = `<span class="badge ${statusClass}">${statusText}</span>`;
-                
-                // Payment status
-                const paymentStatus = booking.payment_status || 'pending';
-                const paymentStatusText = paymentStatus.charAt(0).toUpperCase() + paymentStatus.slice(1);
-                let paymentStatusClass = 'badge-secondary';
-                switch(paymentStatus) {
-                    case 'pending': paymentStatusClass = 'badge-warning'; break;
-                    case 'paid': paymentStatusClass = 'badge-success'; break;
-                    case 'failed': paymentStatusClass = 'badge-danger'; break;
-                }
-                document.getElementById('view_payment_status').innerHTML = `<span class="badge ${paymentStatusClass}">${paymentStatusText}</span>`;
-                
-                document.getElementById('view_payment_amount').textContent = booking.payment_amount ? '$' + parseFloat(booking.payment_amount).toFixed(2) : 'N/A';
-                document.getElementById('view_payment_method').textContent = booking.payment_method || 'N/A';
-                document.getElementById('view_special_notes').textContent = booking.special_notes || 'None';
             }
             
             // Bulk selection functions

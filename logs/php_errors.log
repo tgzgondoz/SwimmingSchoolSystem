@@ -1,0 +1,6 @@
+[07-Jan-2026 11:30:37 Europe/Berlin] Delete booking attempt - Booking ID: 8
+[07-Jan-2026 11:30:37 Europe/Berlin] Booking found - Class ID: 9, Status: cancelled
+[07-Jan-2026 11:30:37 Europe/Berlin] Booking deletion error: Cannot delete or update a parent row: a foreign key constraint fails (`swimming_school`.`payments`, CONSTRAINT `payments_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`))
+[07-Jan-2026 11:30:42 Europe/Berlin] Delete booking attempt - Booking ID: 7
+[07-Jan-2026 11:30:42 Europe/Berlin] Booking found - Class ID: 8, Status: cancelled
+[07-Jan-2026 11:30:42 Europe/Berlin] Booking deletion error: Cannot delete or update a parent row: a foreign key constraint fails (`swimming_school`.`payments`, CONSTRAINT `payments_ibfk_2` FOREIGN KEY (`booking_id`) REFERENCES `bookings` (`id`))

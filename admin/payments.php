@@ -47,8 +47,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($payment_id <= 0 || !in_array($status, ['pending', 'paid', 'failed'])) {
             $error_msg = "Invalid payment data.";
         } else {
-            $stmt = $conn->prepare("UPDATE payments SET status = ?, payment_method = ?, reference_number = ?, updated_at = NOW() WHERE id = ?");
-            $stmt->bind_param("sssi", $status, $payment_method, $reference_number, $payment_id);
+            // Check if updated_at column exists
+            $check_column = $conn->query("SHOW COLUMNS FROM payments LIKE 'updated_at'");
+            if ($check_column && $check_column->num_rows > 0) {
+                // Column exists, use full query
+                $stmt = $conn->prepare("UPDATE payments SET status = ?, payment_method = ?, reference_number = ?, updated_at = NOW() WHERE id = ?");
+                $stmt->bind_param("sssi", $status, $payment_method, $reference_number, $payment_id);
+            } else {
+                // Column doesn't exist, use simpler query
+                $stmt = $conn->prepare("UPDATE payments SET status = ?, payment_method = ?, reference_number = ? WHERE id = ?");
+                $stmt->bind_param("sssi", $status, $payment_method, $reference_number, $payment_id);
+            }
             
             if ($stmt->execute()) {
                 $success_msg = "Payment status updated successfully!";
@@ -81,8 +90,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($student_id <= 0 || $amount <= 0 || empty($payment_method)) {
             $error_msg = "Please fill in all required fields with valid data.";
         } else {
-            $stmt = $conn->prepare("INSERT INTO payments (user_id, amount, payment_method, reference_number, description, status, payment_date, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
-            $stmt->bind_param("idssss", $student_id, $amount, $payment_method, $reference_number, $description, $status);
+            // Check if payment_date column exists in POST, otherwise use current date
+            $payment_date = isset($_POST['payment_date']) && !empty($_POST['payment_date']) 
+                ? $_POST['payment_date'] 
+                : date('Y-m-d H:i:s');
+            
+            // Check if updated_at column exists
+            $check_column = $conn->query("SHOW COLUMNS FROM payments LIKE 'updated_at'");
+            if ($check_column && $check_column->num_rows > 0) {
+                // Column exists, use full query
+                $stmt = $conn->prepare("INSERT INTO payments (user_id, amount, payment_method, reference_number, description, status, payment_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())");
+                $stmt->bind_param("idsssss", $student_id, $amount, $payment_method, $reference_number, $description, $status, $payment_date);
+            } else {
+                // Column doesn't exist, use simpler query
+                $stmt = $conn->prepare("INSERT INTO payments (user_id, amount, payment_method, reference_number, description, status, payment_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
+                $stmt->bind_param("idsssss", $student_id, $amount, $payment_method, $reference_number, $description, $status, $payment_date);
+            }
             
             if ($stmt->execute()) {
                 $payment_id = $stmt->insert_id;
@@ -307,7 +330,7 @@ $current_date = date('l, F j, Y');
             min-height: 100vh;
         }
         
-        /* Sidebar - Same as students.php */
+        /* Sidebar */
         .sidebar {
             width: 240px;
             background-color: white;

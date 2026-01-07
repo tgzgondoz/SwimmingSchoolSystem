@@ -1,308 +1,325 @@
 <?php
-// index.php - Professional Public Landing Page (Fixed)
+// index.php - Professional Public Landing Page
 session_start();
-include __DIR__ . '/inc/db.php';
+require_once __DIR__ . '/inc/db.php';
+require_once __DIR__ . '/inc/functions.php';
 
-// Get school settings
-$school_name = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'school_name'")->fetch_assoc()['setting_value'] ?? 'AquaFlow Swimming School';
-$school_email = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'school_email'")->fetch_assoc()['setting_value'] ?? 'info@aquaflow.com';
-$school_phone = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'school_phone'")->fetch_assoc()['setting_value'] ?? '+263 77 123 4567';
-$school_address = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'school_address'")->fetch_assoc()['setting_value'] ?? '123 Swimming Lane, Harare';
-
-// Get additional school info
-$school_motto = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'school_motto'")->fetch_assoc()['setting_value'] ?? 'Swimming Excellence for All';
-$school_description = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'school_description'")->fetch_assoc()['setting_value'] ?? 'Professional swimming instruction for all ages and skill levels in Zimbabwe';
-
-// Get school stats - using fallbacks since students table might not exist
-try {
-    // Try to get total students from users table
-    $total_students_result = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'student'");
-    $total_students = $total_students_result ? $total_students_result->fetch_assoc()['count'] : 500;
-} catch (Exception $e) {
-    $total_students = 500; // Fallback value
-}
-
-try {
-    // Try to get total upcoming classes
-    $total_classes_result = $conn->query("SELECT COUNT(*) as count FROM classes WHERE start_time >= NOW()");
-    $total_classes = $total_classes_result ? $total_classes_result->fetch_assoc()['count'] : 25;
-} catch (Exception $e) {
-    $total_classes = 25; // Fallback value
-}
-
-try {
-    // Try to get certified instructors
-    $certified_instructors_result = $conn->query("SELECT COUNT(*) as count FROM instructors");
-    $certified_instructors = $certified_instructors_result ? $certified_instructors_result->fetch_assoc()['count'] : 15;
-} catch (Exception $e) {
-    $certified_instructors = 15; // Fallback value
-}
-
-// If user is logged in, redirect to appropriate dashboard
+// Redirect logged-in users to appropriate dashboard
 if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     switch ($_SESSION['role']) {
         case 'admin':
             header('Location: admin/index.php');
-            break;
+            exit();
         case 'student':
-            header('Location: student/index.php');
-            break;
-        default:
-            // Stay on landing page
+            header('Location: student/dashboard.php');
+            exit();
     }
-    exit();
 }
+
+// Get school settings
+$settings = [];
+$settings_result = $conn->query("SELECT setting_key, setting_value FROM settings");
+if ($settings_result) {
+    while ($row = $settings_result->fetch_assoc()) {
+        $settings[$row['setting_key']] = $row['setting_value'];
+    }
+}
+
+// Set default values
+$school_name = htmlspecialchars($settings['school_name'] ?? 'Elite Swimming Academy');
+$school_email = htmlspecialchars($settings['school_email'] ?? 'info@eliteswimacademy.com');
+$school_phone = htmlspecialchars($settings['school_phone'] ?? '+263 77 123 4567');
+$school_address = htmlspecialchars($settings['school_address'] ?? '123 Swimming Lane, Harare, Zimbabwe');
+$school_motto = htmlspecialchars($settings['school_motto'] ?? 'Excellence in Every Stroke');
+$school_description = htmlspecialchars($settings['school_description'] ?? 'Professional swimming instruction for all ages and skill levels in Zimbabwe');
+
+// Get school statistics
+try {
+    $total_students = $conn->query("SELECT COUNT(*) as total FROM users WHERE role = 'student'")->fetch_assoc()['total'] ?? 500;
+    $active_instructors = $conn->query("SELECT COUNT(*) as total FROM instructors WHERE status = 'active'")->fetch_assoc()['total'] ?? 15;
+    $total_classes = $conn->query("SELECT COUNT(*) as total FROM classes WHERE start_time >= NOW()")->fetch_assoc()['total'] ?? 25;
+} catch (Exception $e) {
+    // Fallback values
+    $total_students = 500;
+    $active_instructors = 15;
+    $total_classes = 25;
+}
+
+// Get featured classes
+$featured_classes = [];
+try {
+    $classes_stmt = $conn->prepare("
+        SELECT c.*, i.name as instructor_name 
+        FROM classes c 
+        LEFT JOIN instructors i ON c.instructor_id = i.id 
+        WHERE c.start_time >= NOW() AND c.slots_available > 0 
+        ORDER BY c.created_at DESC 
+        LIMIT 3
+    ");
+    if ($classes_stmt) {
+        $classes_stmt->execute();
+        $classes_result = $classes_stmt->get_result();
+        $featured_classes = $classes_result->fetch_all(MYSQLI_ASSOC) ?: [];
+        $classes_stmt->close();
+    }
+} catch (Exception $e) {
+    // Keep empty array
+}
+
+// Get testimonials
+$testimonials = [
+    [
+        'name' => 'Tendai Moyo',
+        'age' => 'Parent',
+        'text' => 'My children have gained so much confidence since joining. The instructors are amazing!',
+        'rating' => 5
+    ],
+    [
+        'name' => 'Samantha Chidziva',
+        'age' => 'Adult Student',
+        'text' => 'I never thought I\'d learn to swim at 40. Patient instructors and great facilities!',
+        'rating' => 5
+    ],
+    [
+        'name' => 'David Zhou',
+        'age' => 'Competitive Swimmer',
+        'text' => 'The advanced training program took my swimming to the next level. Highly recommended!',
+        'rating' => 5
+    ]
+];
+
+// Get current date
+$current_year = date('Y');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($school_name) ?> | Waterfalls</title>
-    <meta name="description" content="<?= htmlspecialchars($school_description) ?>">
-    <meta name="keywords" content="swimming school, learn to swim, swimming lessons, Zimbabwe, professional instructors, swimming classes">
+    <title><?= $school_name ?> | Professional Swimming Academy</title>
+    <meta name="description" content="<?= $school_description ?>">
+    <meta name="keywords" content="swimming lessons, learn to swim, swimming classes, Zimbabwe, swimming school, professional instructors">
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <style>
         :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --secondary: #6c757d;
-            --accent: #495057;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --info: #0dcaf0;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --gray-100: #f8f9fa;
-            --gray-200: #e9ecef;
-            --gray-300: #dee2e6;
-            --gray-400: #ced4da;
-            --gray-500: #adb5bd;
-            --gray-600: #6c757d;
-            --gray-700: #495057;
-            --gray-800: #343a40;
-            --gray-900: #212529;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #dbeafe;
+            --secondary: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            
+            --gradient-primary: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            --gradient-dark: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         }
-
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
+        html {
+            scroll-behavior: smooth;
+        }
+        
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            line-height: 1.7;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             color: var(--gray-800);
+            line-height: 1.6;
             overflow-x: hidden;
         }
-
+        
         h1, h2, h3, h4, h5, h6 {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 600;
+            font-weight: 700;
             line-height: 1.2;
-            margin-bottom: 1rem;
+            color: var(--dark);
         }
-
+        
         /* Navigation */
         .navbar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
             padding: 1rem 0;
-            background: white;
-            border-bottom: 1px solid var(--gray-200);
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            z-index: 1030;
+            z-index: 1000;
+            border-bottom: 1px solid var(--gray-200);
             transition: all 0.3s ease;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
-
+        
         .navbar.scrolled {
             padding: 0.75rem 0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
         }
-
+        
         .navbar-brand {
-            font-family: 'Poppins', sans-serif;
-            font-weight: 700;
+            font-weight: 800;
             font-size: 1.5rem;
             color: var(--primary) !important;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            text-decoration: none;
+            gap: 0.75rem;
         }
-
-        .brand-icon {
-            width: 40px;
-            height: 40px;
-            background: var(--primary);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.25rem;
+        
+        .navbar-brand i {
+            font-size: 1.75rem;
         }
-
+        
         .nav-link {
             font-weight: 500;
             color: var(--gray-700) !important;
-            padding: 0.625rem 0.875rem !important;
+            padding: 0.5rem 1rem !important;
             border-radius: 6px;
             transition: all 0.3s ease;
-            font-size: 0.95rem;
-            text-decoration: none;
         }
-
+        
         .nav-link:hover {
             color: var(--primary) !important;
-            background: var(--gray-100);
+            background: var(--primary-light);
         }
-
+        
         .nav-link.active {
             color: var(--primary) !important;
             font-weight: 600;
         }
-
+        
         /* Buttons */
+        .btn {
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+        }
+        
         .btn-primary {
-            background: var(--primary);
+            background: var(--gradient-primary);
             color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0.875rem 1.75rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
         }
-
+        
         .btn-primary:hover {
-            background: var(--primary-dark);
-            color: white;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+            color: white;
         }
-
-        .btn-secondary {
-            background: white;
-            color: var(--primary);
+        
+        .btn-outline-primary {
             border: 2px solid var(--primary);
-            border-radius: 8px;
-            padding: 0.875rem 1.75rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
+            color: var(--primary);
+            background: transparent;
         }
-
-        .btn-secondary:hover {
+        
+        .btn-outline-primary:hover {
             background: var(--primary);
             color: white;
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
         }
-
-        .btn-accent {
-            background: var(--gray-800);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            padding: 0.875rem 1.75rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-        }
-
-        .btn-accent:hover {
-            background: var(--dark);
-            color: white;
-            transform: translateY(-2px);
-        }
-
+        
         /* Hero Section */
         .hero-section {
-            min-height: 90vh;
-            background: var(--primary);
-            padding-top: 80px;
-            position: relative;
-            overflow: hidden;
+            min-height: 100vh;
+            background: linear-gradient(rgba(30, 41, 59, 0.85), rgba(30, 41, 59, 0.9)), 
+                        url('https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: white;
             display: flex;
             align-items: center;
-            color: white;
+            padding-top: 80px;
         }
-
+        
+        .hero-content {
+            padding: 4rem 0;
+        }
+        
         .hero-title {
-            font-size: 3rem;
-            font-weight: 700;
+            font-size: 3.5rem;
+            font-weight: 800;
             line-height: 1.1;
             margin-bottom: 1.5rem;
+            color: white;
         }
-
-        @media (max-width: 768px) {
-            .hero-title {
-                font-size: 2.25rem;
-            }
-        }
-
+        
         .hero-subtitle {
-            font-size: 1.125rem;
-            opacity: 0.95;
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.9);
             margin-bottom: 2rem;
             max-width: 600px;
         }
-
+        
         .hero-stats {
             display: flex;
             gap: 2rem;
             margin-top: 3rem;
             flex-wrap: wrap;
         }
-
+        
         .stat-item {
             text-align: center;
         }
-
+        
         .stat-number {
             font-size: 2rem;
-            font-weight: 700;
+            font-weight: 800;
+            color: white;
             margin-bottom: 0.25rem;
         }
-
+        
         .stat-label {
             font-size: 0.875rem;
-            opacity: 0.9;
+            color: rgba(255, 255, 255, 0.8);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
-
+        
         /* Sections */
         section {
-            padding: 4rem 0;
+            padding: 5rem 0;
         }
-
-        .section-title {
+        
+        .section-header {
             text-align: center;
             margin-bottom: 3rem;
         }
-
-        .section-title h2 {
-            font-size: 2.25rem;
+        
+        .section-title {
+            font-size: 2.5rem;
             margin-bottom: 1rem;
-            color: var(--dark);
         }
-
-        .section-title .subtitle {
+        
+        .section-subtitle {
             color: var(--gray-600);
             font-size: 1.125rem;
             max-width: 600px;
             margin: 0 auto;
         }
-
+        
         /* Features */
+        .features-section {
+            background: var(--gray-50);
+        }
+        
         .feature-card {
             background: white;
             border-radius: 12px;
@@ -313,78 +330,77 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             position: relative;
             overflow: hidden;
         }
-
+        
         .feature-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
             border-color: var(--primary);
         }
-
+        
         .feature-icon {
             width: 60px;
             height: 60px;
-            background: var(--primary);
+            background: var(--primary-light);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: var(--primary);
             font-size: 1.5rem;
             margin-bottom: 1.5rem;
         }
-
+        
         .feature-card h4 {
             font-size: 1.25rem;
             margin-bottom: 1rem;
-            color: var(--dark);
         }
-
-        /* Class Cards */
+        
+        /* Classes */
         .class-card {
             background: white;
             border-radius: 12px;
             overflow: hidden;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
             transition: all 0.3s ease;
             height: 100%;
             border: 1px solid var(--gray-200);
         }
-
+        
         .class-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             border-color: var(--primary);
         }
-
-        .class-header {
-            height: 180px;
-            background: var(--gray-800);
+        
+        .class-image {
+            height: 200px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             position: relative;
             overflow: hidden;
         }
-
+        
         .class-badge {
             position: absolute;
             top: 1rem;
             right: 1rem;
-            background: var(--primary);
-            color: white;
+            background: white;
+            color: var(--primary);
             padding: 0.375rem 0.875rem;
             border-radius: 20px;
             font-size: 0.75rem;
             font-weight: 600;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-
-        .class-body {
+        
+        .class-content {
             padding: 1.75rem;
         }
-
+        
         .class-title {
             font-size: 1.25rem;
             margin-bottom: 0.75rem;
-            color: var(--dark);
         }
-
+        
         .class-meta {
             display: flex;
             align-items: center;
@@ -393,88 +409,190 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             font-size: 0.875rem;
             color: var(--gray-600);
         }
-
+        
         .class-meta i {
             color: var(--primary);
         }
-
+        
         .class-price {
             font-size: 1.5rem;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--primary);
             margin-bottom: 1.5rem;
         }
-
+        
         .class-price span {
             font-size: 0.875rem;
             color: var(--gray-500);
             font-weight: 500;
         }
-
+        
+        /* Testimonials */
+        .testimonials-section {
+            background: var(--gradient-dark);
+            color: white;
+        }
+        
+        .testimonials-section .section-title {
+            color: white;
+        }
+        
+        .testimonials-section .section-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .testimonial-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            height: 100%;
+        }
+        
+        .testimonial-rating {
+            color: #fbbf24;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+        }
+        
+        .testimonial-text {
+            font-size: 1rem;
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .author-avatar {
+            width: 48px;
+            height: 48px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+        
+        .author-info h6 {
+            color: white;
+            margin: 0;
+            font-size: 1rem;
+        }
+        
+        .author-info p {
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0;
+            font-size: 0.875rem;
+        }
+        
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .cta-title {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: white;
+        }
+        
+        .cta-subtitle {
+            font-size: 1.125rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
         /* Footer */
         footer {
-            background: var(--gray-900);
+            background: var(--dark);
             color: white;
             padding: 4rem 0 2rem;
         }
-
+        
+        .footer-section {
+            margin-bottom: 2.5rem;
+        }
+        
+        .footer-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .footer-logo i {
+            color: var(--primary);
+        }
+        
         .school-description {
-            color: var(--gray-400);
+            color: rgba(255, 255, 255, 0.7);
             font-size: 0.875rem;
             line-height: 1.7;
             margin-bottom: 1.5rem;
         }
-
-        .footer-section {
-            margin-bottom: 2.5rem;
-        }
-
-        .footer-section h5 {
+        
+        .footer-links h5 {
+            color: white;
             font-size: 1rem;
             margin-bottom: 1.5rem;
-            color: white;
         }
-
-        .footer-links {
+        
+        .footer-links ul {
             list-style: none;
             padding: 0;
             margin: 0;
         }
-
+        
         .footer-links li {
             margin-bottom: 0.75rem;
         }
-
+        
         .footer-links a {
-            color: var(--gray-400);
+            color: rgba(255, 255, 255, 0.7);
             text-decoration: none;
             transition: all 0.3s ease;
         }
-
+        
         .footer-links a:hover {
             color: white;
             padding-left: 0.5rem;
         }
-
+        
         .contact-info {
-            color: var(--gray-400);
+            color: rgba(255, 255, 255, 0.7);
         }
-
+        
         .contact-info i {
             color: var(--primary);
             margin-right: 0.75rem;
             width: 20px;
         }
-
+        
         .social-links {
             display: flex;
             gap: 0.75rem;
             margin-top: 1.5rem;
         }
-
+        
         .social-links a {
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
             background: rgba(255, 255, 255, 0.1);
             border-radius: 50%;
             display: flex;
@@ -484,60 +602,67 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             text-decoration: none;
             transition: all 0.3s ease;
         }
-
+        
         .social-links a:hover {
             background: var(--primary);
             transform: translateY(-2px);
         }
-
+        
         .copyright {
             text-align: center;
             padding-top: 2rem;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--gray-500);
+            color: rgba(255, 255, 255, 0.5);
             font-size: 0.875rem;
         }
-
+        
         /* Animations */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(30px);
             }
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
-
-        .fade-in-up {
+        
+        .fade-in {
+            opacity: 0;
             animation: fadeInUp 0.6s ease forwards;
         }
-
+        
         .delay-1 {
             animation-delay: 0.2s;
         }
-
+        
         .delay-2 {
             animation-delay: 0.4s;
         }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            section {
-                padding: 3rem 0;
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .hero-title {
+                font-size: 2.75rem;
             }
             
-            .hero-title {
+            .section-title {
                 font-size: 2rem;
             }
             
-            .section-title h2 {
-                font-size: 1.75rem;
+            .cta-title {
+                font-size: 2rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.25rem;
             }
             
-            .feature-card, .class-card {
-                margin-bottom: 1.5rem;
+            section {
+                padding: 3rem 0;
             }
             
             .hero-stats {
@@ -547,18 +672,35 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             .stat-number {
                 font-size: 1.75rem;
             }
+            
+            .feature-card, .class-card, .testimonial-card {
+                margin-bottom: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .hero-title {
+                font-size: 2rem;
+            }
+            
+            .section-title {
+                font-size: 1.75rem;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
         }
     </style>
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light">
+    <nav class="navbar navbar-expand-lg">
         <div class="container">
             <a class="navbar-brand" href="#">
-                <div class="brand-icon">
-                    <i class="bi bi-droplet"></i>
-                </div>
-                <span><?= htmlspecialchars($school_name) ?></span>
+                <i class="bi bi-droplet-half"></i>
+                <?= $school_name ?>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -575,14 +717,17 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         <a class="nav-link" href="#classes">Classes</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="#testimonials">Testimonials</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="#contact">Contact</a>
                     </li>
                     <li class="nav-item ms-2">
-                        <a href="student/login.php" class="btn btn-secondary">Login</a>
+                        <a href="student/login.php" class="btn btn-outline-primary">Login</a>
                     </li>
                     <li class="nav-item ms-2">
                         <a href="student/register.php" class="btn btn-primary">
-                            <i class="bi bi-person-plus"></i> Sign Up
+                            <i class="bi bi-person-plus me-1"></i> Sign Up
                         </a>
                     </li>
                 </ul>
@@ -593,64 +738,65 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     <!-- Hero Section -->
     <section class="hero-section" id="home">
         <div class="container">
-            <div class="hero-content">
-                <h1 class="hero-title fade-in-up">
-                    Where Confidence Flows &<br>
-                    Champions Grow
-                </h1>
-                <p class="hero-subtitle fade-in-up delay-1">
-                    <?= htmlspecialchars($school_description) ?>. Join Zimbabwe's premier swimming school offering 
-                    professional lessons for all ages and skill levels.
-                </p>
-                <div class="d-flex flex-wrap gap-3 mb-5 fade-in-up delay-2">
-                    <a href="student/register.php" class="btn btn-primary">
-                        <i class="bi bi-person-plus"></i> Start Your Journey
-                    </a>
-                    <a href="#classes" class="btn btn-secondary">
-                        <i class="bi bi-play-circle"></i> Explore Classes
-                    </a>
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <div class="hero-content fade-in">
+                        <h1 class="hero-title">Dive into Excellence with <?= $school_name ?></h1>
+                        <p class="hero-subtitle"><?= $school_description ?>. Join Zimbabwe's premier swimming academy offering world-class instruction for all ages and skill levels.</p>
+                        <div class="d-flex flex-wrap gap-3 mb-5">
+                            <a href="student/register.php" class="btn btn-primary">
+                                <i class="bi bi-person-plus me-2"></i> Start Your Journey
+                            </a>
+                            <a href="#classes" class="btn btn-outline-primary" style="background: rgba(255, 255, 255, 0.1); color: white; border-color: white;">
+                                <i class="bi bi-play-circle me-2"></i> Explore Classes
+                            </a>
+                        </div>
+                        <div class="hero-stats">
+                            <div class="stat-item">
+                                <div class="stat-number"><?= number_format($total_students) ?>+</div>
+                                <div class="stat-label">Happy Students</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number"><?= $active_instructors ?></div>
+                                <div class="stat-label">Certified Instructors</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number"><?= $total_classes ?>+</div>
+                                <div class="stat-label">Weekly Classes</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number">98%</div>
+                                <div class="stat-label">Success Rate</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="hero-stats fade-in-up delay-1">
-                    <div class="stat-item">
-                        <div class="stat-number"><?= number_format($total_students) ?>+</div>
-                        <div class="stat-label">Happy Students</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-number"><?= $certified_instructors ?></div>
-                        <div class="stat-label">Certified Instructors</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-number"><?= $total_classes ?>+</div>
-                        <div class="stat-label">Weekly Classes</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-number">98%</div>
-                        <div class="stat-label">Success Rate</div>
-                    </div>
+                <div class="col-lg-6">
+                    <!-- Hero image would go here -->
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Features Section -->
+    <!-- About Section -->
     <section id="about">
         <div class="container">
-            <div class="section-title">
-                <h2>Why Choose <?= htmlspecialchars($school_name) ?>?</h2>
-                <p class="subtitle">We provide exceptional swimming education with a focus on safety, skill development, and fun.</p>
+            <div class="section-header">
+                <h2 class="section-title">Why Choose <?= $school_name ?>?</h2>
+                <p class="section-subtitle">We provide exceptional swimming education with a focus on safety, skill development, and building water confidence.</p>
             </div>
             <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="feature-card fade-in-up">
+                <div class="col-md-4 fade-in">
+                    <div class="feature-card">
                         <div class="feature-icon">
                             <i class="bi bi-shield-check"></i>
                         </div>
-                        <h4>Safety First Approach</h4>
-                        <p>Certified lifeguards, modern safety equipment, and strict protocols ensure a secure learning environment for all students.</p>
+                        <h4>Safety First</h4>
+                        <p>Certified lifeguards, modern safety equipment, and strict protocols ensure a secure learning environment for all our students.</p>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="feature-card fade-in-up delay-1">
+                <div class="col-md-4 fade-in delay-1">
+                    <div class="feature-card">
                         <div class="feature-icon">
                             <i class="bi bi-person-badge"></i>
                         </div>
@@ -658,13 +804,57 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         <p>Our certified instructors have years of experience and are passionate about helping students achieve their swimming goals.</p>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="feature-card fade-in-up delay-2">
+                <div class="col-md-4 fade-in delay-2">
+                    <div class="feature-card">
                         <div class="feature-icon">
                             <i class="bi bi-graph-up"></i>
                         </div>
                         <h4>Progress Tracking</h4>
-                        <p>Monitor your swimming journey with our digital progress tracking system and personalized feedback.</p>
+                        <p>Monitor your swimming journey with our digital progress tracking system and receive personalized feedback from instructors.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section">
+        <div class="container">
+            <div class="row g-4 align-items-center">
+                <div class="col-lg-6">
+                    <h2 class="section-title">Our Approach to Swimming Education</h2>
+                    <p class="mb-4">At <?= $school_name ?>, we believe swimming is more than just a skill – it's a life-saving ability and a pathway to confidence and fitness.</p>
+                    <ul class="list-unstyled">
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-primary me-2"></i>
+                            <strong>Personalized Learning:</strong> Customized programs based on age, skill level, and goals
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-primary me-2"></i>
+                            <strong>Modern Facilities:</strong> Temperature-controlled pools and state-of-the-art equipment
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-primary me-2"></i>
+                            <strong>Flexible Scheduling:</strong> Morning, afternoon, and weekend classes available
+                        </li>
+                        <li class="mb-3">
+                            <i class="bi bi-check-circle-fill text-primary me-2"></i>
+                            <strong>Progress Certificates:</strong> Recognize achievements and track development
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="bi bi-award"></i>
+                        </div>
+                        <h4>Certified Excellence</h4>
+                        <p>We are proudly certified by the Zimbabwe Swimming Federation and follow international safety standards. Our instructors undergo regular training and certification to ensure the highest quality of instruction.</p>
+                        <div class="mt-4">
+                            <a href="student/register.php" class="btn btn-primary">
+                                <i class="bi bi-calendar-check me-2"></i> Book Your First Lesson
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -672,68 +862,108 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     </section>
 
     <!-- Classes Section -->
-    <section class="bg-light" id="classes">
+    <section id="classes">
         <div class="container">
-            <div class="section-title">
-                <h2>Featured Classes</h2>
-                <p class="subtitle">Find the perfect swimming class for your age and skill level</p>
+            <div class="section-header">
+                <h2 class="section-title">Featured Classes</h2>
+                <p class="section-subtitle">Find the perfect swimming class for your age and skill level</p>
             </div>
-            <?php
-            // Get featured classes with error handling
-            try {
-                $classes_result = $conn->query("
-                    SELECT c.*, i.name as instructor_name 
-                    FROM classes c 
-                    LEFT JOIN instructors i ON c.instructor_id = i.id 
-                    WHERE c.start_time >= NOW() AND c.slots_available > 0 
-                    ORDER BY c.start_time ASC 
-                    LIMIT 3
-                ");
-                $classes = $classes_result ? $classes_result->fetch_all(MYSQLI_ASSOC) : [];
-            } catch (Exception $e) {
-                $classes = [];
-            }
             
-            if (!empty($classes)):
-            ?>
-            <div class="row g-4">
-                <?php foreach($classes as $class): ?>
-                <div class="col-md-4">
-                    <div class="class-card fade-in-up">
-                        <div class="class-header">
-                            <span class="class-badge"><?= htmlspecialchars($class['age_group']) ?></span>
+            <?php if (!empty($featured_classes)): ?>
+                <div class="row g-4">
+                    <?php foreach ($featured_classes as $class): ?>
+                        <div class="col-md-4 fade-in">
+                            <div class="class-card">
+                                <div class="class-image">
+                                    <span class="class-badge"><?= htmlspecialchars($class['age_group'] ?? 'All Ages') ?></span>
+                                </div>
+                                <div class="class-content">
+                                    <h3 class="class-title"><?= htmlspecialchars($class['title']) ?></h3>
+                                    <div class="class-meta">
+                                        <span><i class="bi bi-person"></i> <?= htmlspecialchars($class['instructor_name'] ?? 'Certified Instructor') ?></span>
+                                        <span><i class="bi bi-clock"></i> <?= date('g:i A', strtotime($class['start_time'])) ?></span>
+                                    </div>
+                                    <p class="text-muted mb-3"><?= htmlspecialchars(substr($class['description'] ?? 'Professional swimming instruction', 0, 100)) ?>...</p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="class-price">
+                                            $<?= number_format($class['price'] ?? 0, 2) ?> <span>per session</span>
+                                        </div>
+                                        <a href="student/register.php" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-calendar-plus"></i> Book
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="class-body">
-                            <h3 class="class-title"><?= htmlspecialchars($class['title']) ?></h3>
-                            <div class="class-meta">
-                                <span><i class="bi bi-person"></i> <?= htmlspecialchars($class['instructor_name'] ?? 'Certified Instructor') ?></span>
-                                <span><i class="bi bi-calendar"></i> <?= date('M j, Y', strtotime($class['start_time'])) ?></span>
+                    <?php endforeach; ?>
+                </div>
+                
+                <div class="text-center mt-5 fade-in">
+                    <a href="student/register.php?view=classes" class="btn btn-primary">
+                        <i class="bi bi-eye me-2"></i> View All Classes
+                    </a>
+                </div>
+            <?php else: ?>
+                <div class="text-center py-5">
+                    <div class="feature-icon mx-auto mb-4" style="background: var(--gray-200); color: var(--gray-600);">
+                        <i class="bi bi-calendar-x"></i>
+                    </div>
+                    <h4 class="text-muted mb-3">New Classes Coming Soon!</h4>
+                    <p class="text-muted mb-4">We're currently scheduling our next batch of swimming classes. Check back soon or register to be notified.</p>
+                    <a href="student/register.php" class="btn btn-primary">
+                        <i class="bi bi-bell me-2"></i> Get Notified
+                    </a>
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials-section" id="testimonials">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">What Our Students Say</h2>
+                <p class="section-subtitle">Hear from our happy students and parents about their swimming journey with us</p>
+            </div>
+            <div class="row g-4">
+                <?php foreach ($testimonials as $testimonial): ?>
+                    <div class="col-md-4 fade-in">
+                        <div class="testimonial-card">
+                            <div class="testimonial-rating">
+                                <?php for ($i = 0; $i < $testimonial['rating']; $i++): ?>
+                                    <i class="bi bi-star-fill"></i>
+                                <?php endfor; ?>
                             </div>
-                            <p class="text-muted"><?= htmlspecialchars(substr($class['description'] ?? 'Professional swimming instruction', 0, 120)) ?>...</p>
-                            <div class="class-price">
-                                $<?= number_format($class['price'] ?? 0, 2) ?> <span>per session</span>
+                            <p class="testimonial-text">"<?= htmlspecialchars($testimonial['text']) ?>"</p>
+                            <div class="testimonial-author">
+                                <div class="author-avatar">
+                                    <?= strtoupper(substr($testimonial['name'], 0, 1)) ?>
+                                </div>
+                                <div class="author-info">
+                                    <h6><?= htmlspecialchars($testimonial['name']) ?></h6>
+                                    <p><?= htmlspecialchars($testimonial['age']) ?></p>
+                                </div>
                             </div>
-                            <a href="student/register.php" class="btn btn-accent w-100">
-                                <i class="bi bi-calendar-plus"></i> Book Now
-                            </a>
                         </div>
                     </div>
-                </div>
                 <?php endforeach; ?>
             </div>
-            <?php else: ?>
-            <div class="text-center py-5">
-                <div class="feature-icon mx-auto mb-4" style="background: var(--gray-300);">
-                    <i class="bi bi-calendar-x"></i>
-                </div>
-                <h4 class="text-muted mb-3">Classes Coming Soon!</h4>
-                <p class="text-muted">We're currently scheduling our next batch of swimming classes. Check back soon or register to be notified.</p>
-                <a href="student/register.php" class="btn btn-primary mt-3">
-                    <i class="bi bi-bell me-2"></i> View All Classes
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2 class="cta-title">Ready to Dive In?</h2>
+            <p class="cta-subtitle">Join <?= $school_name ?> today and start your swimming journey. Whether you're a beginner or looking to improve your skills, we have the perfect class for you.</p>
+            <div class="d-flex flex-wrap gap-3 justify-content-center">
+                <a href="student/register.php" class="btn btn-light" style="color: var(--primary);">
+                    <i class="bi bi-person-plus me-2"></i> Sign Up Now
+                </a>
+                <a href="#contact" class="btn btn-outline-light">
+                    <i class="bi bi-telephone me-2"></i> Contact Us
                 </a>
             </div>
-            <?php endif; ?>
-            
         </div>
     </section>
 
@@ -742,13 +972,11 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
         <div class="container">
             <div class="row">
                 <div class="col-lg-4 footer-section">
-                    <h5>
-                        <div class="brand-icon d-inline-flex align-items-center justify-content-center me-2">
-                            <i class="bi bi-droplet"></i>
-                        </div>
-                        <?= htmlspecialchars($school_name) ?>
-                    </h5>
-                    <p class="school-description"><?= htmlspecialchars($school_description) ?></p>
+                    <div class="footer-logo">
+                        <i class="bi bi-droplet-half"></i>
+                        <?= $school_name ?>
+                    </div>
+                    <p class="school-description"><?= $school_description ?></p>
                     <div class="social-links">
                         <a href="#"><i class="bi bi-facebook"></i></a>
                         <a href="#"><i class="bi bi-twitter"></i></a>
@@ -759,9 +987,10 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                 <div class="col-lg-2 footer-section">
                     <h5>Quick Links</h5>
                     <ul class="footer-links">
-                        <li><a href="#home">Home.</a></li>
+                        <li><a href="#home">Home</a></li>
                         <li><a href="#about">About Us</a></li>
                         <li><a href="#classes">Classes</a></li>
+                        <li><a href="#testimonials">Testimonials</a></li>
                         <li><a href="#contact">Contact</a></li>
                     </ul>
                 </div>
@@ -779,25 +1008,25 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                     <div class="contact-info">
                         <p class="mb-3">
                             <i class="bi bi-geo-alt"></i>
-                            <?= htmlspecialchars($school_address) ?>
+                            <?= $school_address ?>
                         </p>
                         <p class="mb-3">
                             <i class="bi bi-telephone"></i>
-                            <?= htmlspecialchars($school_phone) ?>
+                            <?= $school_phone ?>
                         </p>
                         <p class="mb-3">
                             <i class="bi bi-envelope"></i>
-                            <?= htmlspecialchars($school_email) ?>
+                            <?= $school_email ?>
                         </p>
                         <p class="mb-0">
                             <i class="bi bi-clock"></i>
-                            Mon-Fri: 8AM-5PM
+                            Mon-Fri: 8AM-5PM • Sat: 9AM-2PM
                         </p>
                     </div>
                 </div>
             </div>
             <div class="copyright">
-                <p>&copy; <?= date('Y') ?> <?= htmlspecialchars($school_name) ?>. All rights reserved.</p>
+                <p>&copy; <?= $current_year ?> <?= $school_name ?>. All rights reserved.</p>
             </div>
         </div>
     </footer>
@@ -806,8 +1035,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Navbar scroll effect
+            const navbar = document.querySelector('.navbar');
             window.addEventListener('scroll', function() {
-                const navbar = document.querySelector('.navbar');
                 if (window.scrollY > 50) {
                     navbar.classList.add('scrolled');
                 } else {
@@ -827,7 +1056,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         // Close mobile navbar if open
                         const navbarCollapse = document.querySelector('.navbar-collapse');
                         if (navbarCollapse.classList.contains('show')) {
-                            navbarCollapse.classList.remove('show');
+                            const bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+                            bsCollapse.hide();
                         }
                         
                         // Scroll to target
@@ -854,29 +1084,22 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
-                        entry.target.classList.add('fade-in-up');
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
                     }
                 });
             }, observerOptions);
 
-            // Observe elements with animation classes
-            document.querySelectorAll('.feature-card, .class-card').forEach(el => {
+            // Observe elements with fade-in class
+            document.querySelectorAll('.fade-in').forEach(el => {
                 observer.observe(el);
             });
-
-            // Initialize animations on page load
-            setTimeout(() => {
-                document.querySelectorAll('.fade-in-up').forEach(el => {
-                    el.style.opacity = '1';
-                    el.style.transform = 'translateY(0)';
-                });
-            }, 100);
 
             // Update active nav link based on scroll position
             const sections = document.querySelectorAll('section[id]');
             const navLinks = document.querySelectorAll('.nav-link');
             
-            window.addEventListener('scroll', function() {
+            function updateActiveNavLink() {
                 let current = '';
                 sections.forEach(section => {
                     const sectionTop = section.offsetTop;
@@ -892,7 +1115,18 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['role'])) {
                         link.classList.add('active');
                     }
                 });
-            });
+            }
+
+            window.addEventListener('scroll', updateActiveNavLink);
+            updateActiveNavLink(); // Initial call
+
+            // Initialize animations
+            setTimeout(() => {
+                document.querySelectorAll('.fade-in').forEach(el => {
+                    el.style.opacity = '1';
+                    el.style.transform = 'translateY(0)';
+                });
+            }, 100);
         });
     </script>
 </body>
