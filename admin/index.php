@@ -299,20 +299,28 @@ if (isset($_SESSION['success_msg'])) {
     <title>Admin Dashboard | <?= htmlspecialchars($school_name) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --info: #0dcaf0;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --purple: #6f42c1;
-            --pink: #d63384;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #16a34a;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --info: #0891b2;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
         }
         
         * {
@@ -322,10 +330,11 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--gray-50);
             min-height: 100vh;
-            color: #333;
+            color: var(--gray-800);
+            line-height: 1.5;
         }
         
         .dashboard-container {
@@ -335,9 +344,9 @@ if (isset($_SESSION['success_msg'])) {
         
         /* Sidebar */
         .sidebar {
-            width: 260px;
-            background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            width: 240px;
+            background-color: white;
+            border-right: 1px solid var(--gray-200);
             position: fixed;
             top: 0;
             left: 0;
@@ -347,8 +356,8 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .logo-area {
-            padding: 0 25px 25px;
-            border-bottom: 1px solid #eee;
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--gray-200);
             margin-bottom: 20px;
         }
         
@@ -361,29 +370,27 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
-            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 20px;
+            font-size: 18px;
         }
         
         .logo-text h3 {
-            font-weight: 700;
-            font-size: 22px;
+            font-weight: 600;
+            font-size: 18px;
             margin: 0;
-            background: linear-gradient(90deg, var(--primary), var(--purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--gray-900);
         }
         
         .logo-text span {
             font-size: 12px;
-            color: #6c757d;
+            color: var(--gray-500);
         }
         
         .nav-menu {
@@ -391,41 +398,35 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .nav-item {
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .nav-link {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 15px;
-            border-radius: 10px;
-            color: #495057;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: var(--gray-600);
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
         
         .nav-link:hover {
-            background: rgba(13, 110, 253, 0.1);
+            background-color: var(--gray-100);
             color: var(--primary);
-            transform: translateX(5px);
         }
         
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background-color: var(--primary);
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
-        }
-        
-        .nav-link.active:hover {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #0a3d9c 100%);
         }
         
         .nav-link i {
-            width: 20px;
+            width: 18px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .logout-section {
@@ -433,189 +434,153 @@ if (isset($_SESSION['success_msg'])) {
             position: absolute;
             bottom: 0;
             width: 100%;
-            border-top: 1px solid #eee;
+            border-top: 1px solid var(--gray-200);
         }
         
         /* Main Content */
         .main-content {
             flex: 1;
-            margin-left: 260px;
-            padding: 30px;
+            margin-left: 240px;
+            padding: 24px;
         }
         
         /* Header */
         .header {
-            background: white;
-            border-radius: 15px;
-            padding: 25px 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--gray-200);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--gray-900);
         }
         
         .header-left p {
-            color: #6c757d;
+            color: var(--gray-600);
             margin: 0;
+            font-size: 14px;
         }
         
         .user-profile {
             display: flex;
             align-items: center;
-            gap: 15px;
-            background: var(--light);
-            padding: 12px 20px;
-            border-radius: 10px;
+            gap: 12px;
+            background-color: var(--gray-50);
+            padding: 8px 16px;
+            border-radius: 6px;
         }
         
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         .user-info h5 {
-            font-weight: 600;
+            font-weight: 500;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-info p {
-            color: #6c757d;
-            font-size: 14px;
+            color: var(--gray-500);
+            font-size: 12px;
             margin: 0;
         }
         
         /* Welcome Banner */
         .welcome-banner {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-radius: 15px;
-            padding: 30px;
+            background-color: var(--primary);
+            border-radius: 8px;
+            padding: 24px;
             color: white;
-            margin-bottom: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .welcome-banner::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -20%;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
-            border-radius: 50%;
-        }
-        
-        .banner-content {
-            position: relative;
-            z-index: 2;
+            margin-bottom: 24px;
         }
         
         .banner-content h2 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 10px;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
         }
         
         .banner-content p {
-            font-size: 16px;
+            font-size: 14px;
             opacity: 0.9;
-            margin-bottom: 20px;
-            max-width: 600px;
+            margin-bottom: 16px;
         }
         
         .date-time {
             display: inline-block;
-            background: rgba(255, 255, 255, 0.2);
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-size: 14px;
-            backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 13px;
         }
         
         /* Quick Stats */
         .quick-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
         }
         
         .quick-stat {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            padding: 16px;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
-        }
-        
-        .quick-stat:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 6px 25px rgba(0,0,0,0.1);
+            border: 1px solid var(--gray-200);
         }
         
         .quick-stat i {
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-size: 20px;
+            margin-bottom: 8px;
             color: var(--primary);
         }
         
         .quick-stat h4 {
-            font-size: 24px;
-            font-weight: 700;
+            font-size: 20px;
+            font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .quick-stat p {
-            color: #6c757d;
-            font-size: 14px;
-            margin: 5px 0 0 0;
+            color: var(--gray-600);
+            font-size: 13px;
+            margin: 4px 0 0 0;
         }
         
         /* Main Stats Grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
         }
         
         .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
             position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
         
         .stat-card::before {
@@ -624,54 +589,48 @@ if (isset($_SESSION['success_msg'])) {
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            height: 3px;
+            background-color: var(--primary);
         }
         
         .stat-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            margin-bottom: 20px;
+            font-size: 20px;
+            margin-bottom: 16px;
+            background-color: var(--primary);
             color: white;
         }
         
-        .stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, var(--success) 0%, #157347 100%); }
-        .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%); }
-        .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, var(--info) 0%, #0891b2 100%); }
-        .stat-card:nth-child(5) .stat-icon { background: linear-gradient(135deg, var(--purple) 0%, #5936a0 100%); }
-        .stat-card:nth-child(6) .stat-icon { background: linear-gradient(135deg, var(--pink) 0%, #b52e6f 100%); }
-        
         .stat-content h3 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            color: var(--dark);
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--gray-900);
         }
         
         .stat-content p {
-            color: #6c757d;
+            color: var(--gray-600);
             font-size: 14px;
             margin: 0;
         }
         
         .stat-subtext {
             font-size: 12px;
-            color: #6c757d;
-            margin-top: 5px;
+            color: var(--gray-500);
+            margin-top: 4px;
         }
         
         /* Charts Section */
         .charts-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 30px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
         }
         
         @media (max-width: 992px) {
@@ -681,38 +640,37 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .chart-container {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
         }
         
         .chart-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
         
         .chart-header h3 {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .chart-wrapper {
             position: relative;
-            height: 250px;
+            height: 220px;
         }
         
         /* Content Grid */
         .content-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            gap: 24px;
+            margin-bottom: 24px;
         }
         
         @media (max-width: 1200px) {
@@ -723,47 +681,39 @@ if (isset($_SESSION['success_msg'])) {
         
         /* Panel Styling */
         .panel {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            overflow: hidden;
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
         }
         
         .panel-header {
-            padding: 20px 25px;
-            border-bottom: 1px solid #e9ecef;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-200);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .panel-header h3 {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .panel-header .btn-link {
             color: var(--primary);
             text-decoration: none;
             font-weight: 500;
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             align-items: center;
-            gap: 5px;
-            transition: all 0.3s ease;
-        }
-        
-        .panel-header .btn-link:hover {
-            color: var(--primary-dark);
-            gap: 8px;
+            gap: 4px;
         }
         
         .panel-body {
-            padding: 25px;
-            max-height: 400px;
+            padding: 20px;
+            max-height: 360px;
             overflow-y: auto;
         }
         
@@ -771,22 +721,16 @@ if (isset($_SESSION['success_msg'])) {
         .class-list, .booking-list, .payment-list {
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
         }
         
         .class-item, .booking-item, .payment-item {
             display: flex;
             align-items: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            transition: all 0.3s ease;
-            border-left: 4px solid var(--primary);
-        }
-        
-        .class-item:hover, .booking-item:hover, .payment-item:hover {
-            background: #e9ecef;
-            transform: translateX(3px);
+            padding: 12px;
+            background-color: var(--gray-50);
+            border-radius: 6px;
+            border-left: 3px solid var(--primary);
         }
         
         .class-info, .booking-info, .payment-info {
@@ -794,105 +738,101 @@ if (isset($_SESSION['success_msg'])) {
         }
         
         .class-info h6, .booking-info h6, .payment-info h6 {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: var(--dark);
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--gray-900);
+            font-size: 14px;
         }
         
         .class-meta, .booking-meta, .payment-meta {
             display: flex;
-            gap: 15px;
-            font-size: 13px;
-            color: #6c757d;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--gray-600);
         }
         
         .class-meta i, .booking-meta i, .payment-meta i {
             color: var(--primary);
-            margin-right: 5px;
+            margin-right: 4px;
         }
         
         .class-status, .booking-status, .payment-status {
-            min-width: 100px;
+            min-width: 80px;
             text-align: right;
         }
         
         .status-badge {
             display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
         }
         
-        .status-scheduled { background: rgba(13, 110, 253, 0.1); color: var(--primary); }
-        .status-confirmed { background: rgba(25, 135, 84, 0.1); color: var(--success); }
-        .status-pending { background: rgba(255, 193, 7, 0.1); color: var(--warning); }
-        .status-paid { background: rgba(25, 135, 84, 0.1); color: var(--success); }
-        .status-failed { background: rgba(220, 53, 69, 0.1); color: var(--danger); }
+        .status-scheduled { background-color: rgba(37, 99, 235, 0.1); color: var(--primary); }
+        .status-confirmed { background-color: rgba(22, 163, 74, 0.1); color: var(--success); }
+        .status-pending { background-color: rgba(217, 119, 6, 0.1); color: var(--warning); }
+        .status-paid { background-color: rgba(22, 163, 74, 0.1); color: var(--success); }
+        .status-failed { background-color: rgba(220, 38, 38, 0.1); color: var(--danger); }
         
         .capacity-badge {
             display: inline-block;
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: 600;
-            background: rgba(13, 110, 253, 0.1);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            background-color: rgba(37, 99, 235, 0.1);
             color: var(--primary);
         }
         
         /* Instructor Cards */
         .instructor-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
         }
         
         .instructor-card {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 20px;
+            background-color: var(--gray-50);
+            border-radius: 6px;
+            padding: 16px;
             text-align: center;
-            border: 1px solid #e9ecef;
-            transition: all 0.3s ease;
-        }
-        
-        .instructor-card:hover {
-            background: #e9ecef;
-            transform: translateY(-3px);
+            border: 1px solid var(--gray-200);
         }
         
         .instructor-avatar {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 48px;
+            height: 48px;
+            background-color: var(--primary);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 20px;
-            margin: 0 auto 15px;
+            font-weight: 500;
+            font-size: 16px;
+            margin: 0 auto 12px;
         }
         
         .instructor-info h6 {
-            font-weight: 600;
-            margin-bottom: 5px;
-            color: var(--dark);
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--gray-900);
+            font-size: 14px;
         }
         
         .instructor-info p {
-            font-size: 13px;
-            color: #6c757d;
-            margin: 0 0 10px 0;
+            font-size: 12px;
+            color: var(--gray-600);
+            margin: 0 0 8px 0;
         }
         
         .instructor-stats {
             display: flex;
             justify-content: center;
-            gap: 15px;
-            font-size: 12px;
+            gap: 12px;
+            font-size: 11px;
         }
         
         .instructor-stat {
@@ -901,30 +841,30 @@ if (isset($_SESSION['success_msg'])) {
         
         .instructor-stat span {
             display: block;
-            font-weight: 700;
-            color: var(--dark);
+            font-weight: 600;
+            color: var(--gray-900);
         }
         
         /* Capacity Stats */
         .capacity-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
         }
         
         .capacity-stat {
             text-align: center;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border: 1px solid #e9ecef;
+            padding: 12px;
+            background-color: var(--gray-50);
+            border-radius: 6px;
+            border: 1px solid var(--gray-200);
         }
         
         .capacity-stat h5 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 5px;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
         }
         
         .capacity-stat:nth-child(1) h5 { color: var(--success); }
@@ -933,52 +873,44 @@ if (isset($_SESSION['success_msg'])) {
         .capacity-stat:nth-child(4) h5 { color: var(--primary); }
         
         .capacity-stat p {
-            font-size: 13px;
-            color: #6c757d;
+            font-size: 12px;
+            color: var(--gray-600);
             margin: 0;
-        }
-        
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
         }
         
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
-            color: #6c757d;
+            padding: 32px 16px;
+            color: var(--gray-500);
         }
         
         .empty-state i {
-            font-size: 48px;
-            margin-bottom: 15px;
+            font-size: 32px;
+            margin-bottom: 12px;
             opacity: 0.3;
         }
         
         .empty-state h5 {
-            font-weight: 600;
-            margin-bottom: 10px;
-            color: #495057;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--gray-700);
+            font-size: 14px;
         }
         
         .empty-state p {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
+            font-size: 13px;
         }
         
         /* Responsive */
         @media (max-width: 992px) {
             .sidebar {
-                width: 70px;
+                width: 64px;
             }
             
             .main-content {
-                margin-left: 70px;
+                margin-left: 64px;
             }
             
             .logo-text, .nav-text {
@@ -992,25 +924,21 @@ if (isset($_SESSION['success_msg'])) {
         
         @media (max-width: 768px) {
             .main-content {
-                padding: 20px;
+                padding: 16px;
             }
             
             .header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 12px;
                 text-align: center;
             }
             
-            .charts-grid {
-                grid-template-columns: 1fr;
-            }
-            
             .welcome-banner {
-                padding: 20px;
+                padding: 16px;
             }
             
             .banner-content h2 {
-                font-size: 24px;
+                font-size: 18px;
             }
             
             .quick-stats {
@@ -1026,25 +954,25 @@ if (isset($_SESSION['success_msg'])) {
             .stats-grid {
                 grid-template-columns: 1fr;
             }
+            
+            .content-grid {
+                gap: 16px;
+            }
         }
         
         /* Custom Scrollbar */
         .panel-body::-webkit-scrollbar {
-            width: 6px;
+            width: 4px;
         }
         
         .panel-body::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
+            background: var(--gray-100);
+            border-radius: 2px;
         }
         
         .panel-body::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 10px;
-        }
-        
-        .panel-body::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
+            background: var(--gray-300);
+            border-radius: 2px;
         }
     </style>
 </head>
@@ -1101,7 +1029,6 @@ if (isset($_SESSION['success_msg'])) {
                         <span class="nav-text">Payments</span>
                     </a>
                 </div>
-                
                 <div class="nav-item">
                     <a href="settings.php" class="nav-link">
                         <i class="bi bi-gear"></i>
@@ -1112,7 +1039,7 @@ if (isset($_SESSION['success_msg'])) {
             
             <div class="logout-section">
                 <form method="post" action="logout.php" style="margin:0;">
-                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:10px 12px;">
                         <i class="bi bi-box-arrow-right"></i>
                         <span class="nav-text">Logout</span>
                     </button>
@@ -1123,10 +1050,10 @@ if (isset($_SESSION['success_msg'])) {
         <!-- Main Content -->
         <main class="main-content">
             <!-- Header -->
-            <header class="header fade-in">
+            <header class="header">
                 <div class="header-left">
-                    <h1>Admin Dashboard 👑</h1>
-                    <p>Welcome back, <?= htmlspecialchars($user['name'] ?? 'Admin') ?>! Manage your swimming academy efficiently.</p>
+                    <h1>Admin Dashboard</h1>
+                    <p>Welcome back, <?= htmlspecialchars($user['name'] ?? 'Admin') ?></p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
@@ -1140,10 +1067,10 @@ if (isset($_SESSION['success_msg'])) {
             </header>
             
             <!-- Welcome Banner -->
-            <div class="welcome-banner fade-in">
+            <div class="welcome-banner">
                 <div class="banner-content">
                     <h2>System Overview</h2>
-                    <p>Monitor your swim academy's performance, track key metrics, and manage operations efficiently.</p>
+                    <p>Monitor your swim academy's performance and manage operations efficiently.</p>
                     <div class="date-time">
                         <i class="bi bi-calendar-check me-2"></i>
                         <span id="currentDate"><?= $current_date ?></span>
@@ -1154,7 +1081,7 @@ if (isset($_SESSION['success_msg'])) {
             </div>
             
             <!-- Quick Stats -->
-            <div class="quick-stats fade-in">
+            <div class="quick-stats">
                 <div class="quick-stat">
                     <i class="bi bi-calendar-check"></i>
                     <h4><?= $today_bookings ?></h4>
@@ -1178,7 +1105,7 @@ if (isset($_SESSION['success_msg'])) {
             </div>
             
             <!-- Main Stats -->
-            <div class="stats-grid fade-in">
+            <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class="bi bi-people"></i>
@@ -1248,20 +1175,20 @@ if (isset($_SESSION['success_msg'])) {
             
             <!-- Charts Section -->
             <div class="charts-grid">
-                <div class="chart-container fade-in">
+                <div class="chart-container">
                     <div class="chart-header">
                         <h3>Revenue Overview</h3>
-                        <span class="text-muted" style="font-size: 14px;">Last 6 Months</span>
+                        <span class="text-muted" style="font-size: 13px;">Last 6 Months</span>
                     </div>
                     <div class="chart-wrapper">
                         <canvas id="revenueChart"></canvas>
                     </div>
                 </div>
                 
-                <div class="chart-container fade-in">
+                <div class="chart-container">
                     <div class="chart-header">
                         <h3>Bookings Trend</h3>
-                        <span class="text-muted" style="font-size: 14px;">Last 6 Months</span>
+                        <span class="text-muted" style="font-size: 13px;">Last 6 Months</span>
                     </div>
                     <div class="chart-wrapper">
                         <canvas id="bookingsChart"></canvas>
@@ -1274,7 +1201,7 @@ if (isset($_SESSION['success_msg'])) {
                 <!-- Left Column -->
                 <div class="left-column">
                     <!-- Upcoming Classes -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Upcoming Classes</h3>
                             <a href="classes.php" class="btn-link">
@@ -1312,7 +1239,7 @@ if (isset($_SESSION['success_msg'])) {
                     </div>
                     
                     <!-- Recent Bookings -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Recent Bookings</h3>
                             <a href="bookings.php" class="btn-link">
@@ -1352,10 +1279,10 @@ if (isset($_SESSION['success_msg'])) {
                 <!-- Right Column -->
                 <div class="right-column">
                     <!-- Class Capacity Stats -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Class Capacity</h3>
-                            <span class="text-muted" style="font-size: 14px;">Current Status</span>
+                            <span class="text-muted" style="font-size: 13px;">Current Status</span>
                         </div>
                         <div class="panel-body">
                             <div class="capacity-stats">
@@ -1378,13 +1305,13 @@ if (isset($_SESSION['success_msg'])) {
                             </div>
                             
                             <?php if (!empty($class_distribution)): ?>
-                                <div style="margin-top: 25px;">
-                                    <h6 style="font-weight: 600; margin-bottom: 15px; color: var(--dark);">Class Distribution by Age Group</h6>
-                                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div style="margin-top: 20px;">
+                                    <h6 style="font-weight: 500; margin-bottom: 12px; color: var(--gray-900); font-size: 14px;">Class Distribution by Age Group</h6>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
                                         <?php foreach ($class_distribution as $group): ?>
-                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
-                                                <span><?= htmlspecialchars($group['age_group'] ?: 'Not Specified') ?></span>
-                                                <span class="badge bg-primary"><?= $group['count'] ?></span>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--gray-200);">
+                                                <span style="font-size: 13px;"><?= htmlspecialchars($group['age_group'] ?: 'Not Specified') ?></span>
+                                                <span class="badge bg-primary" style="font-size: 11px;"><?= $group['count'] ?></span>
                                             </div>
                                         <?php endforeach; ?>
                                     </div>
@@ -1394,7 +1321,7 @@ if (isset($_SESSION['success_msg'])) {
                     </div>
                     
                     <!-- Top Instructors -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Top Instructors</h3>
                             <a href="instructors.php" class="btn-link">
@@ -1417,7 +1344,7 @@ if (isset($_SESSION['success_msg'])) {
                                             <div class="instructor-info">
                                                 <h6><?= htmlspecialchars($instructor['name']) ?></h6>
                                                 <?php if (!empty($instructor['specialization'])): ?>
-                                                    <p><?= htmlspecialchars($instructor['specialization']) ?></p>
+                                                    <p style="font-size: 11px;"><?= htmlspecialchars($instructor['specialization']) ?></p>
                                                 <?php endif; ?>
                                                 <div class="instructor-stats">
                                                     <div class="instructor-stat">
@@ -1438,7 +1365,7 @@ if (isset($_SESSION['success_msg'])) {
                     </div>
                     
                     <!-- Recent Payments -->
-                    <div class="panel fade-in">
+                    <div class="panel">
                         <div class="panel-header">
                             <h3>Recent Payments</h3>
                             <a href="payments.php" class="btn-link">
@@ -1509,12 +1436,10 @@ if (isset($_SESSION['success_msg'])) {
             
             // Initialize Charts
             const chartColors = {
-                primary: 'rgba(13, 110, 253, 0.8)',
-                success: 'rgba(25, 135, 84, 0.8)',
-                warning: 'rgba(255, 193, 7, 0.8)',
-                danger: 'rgba(220, 53, 69, 0.8)',
-                info: 'rgba(13, 202, 240, 0.8)',
-                purple: 'rgba(111, 66, 193, 0.8)'
+                primary: 'rgba(37, 99, 235, 0.8)',
+                success: 'rgba(22, 163, 74, 0.8)',
+                warning: 'rgba(217, 119, 6, 0.8)',
+                danger: 'rgba(220, 38, 38, 0.8)'
             };
             
             // Revenue Chart
@@ -1527,14 +1452,14 @@ if (isset($_SESSION['success_msg'])) {
                         label: 'Revenue ($)',
                         data: <?= json_encode($revenue_data) ?>,
                         borderColor: chartColors.success,
-                        backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                        backgroundColor: 'rgba(22, 163, 74, 0.05)',
                         borderWidth: 2,
-                        tension: 0.4,
+                        tension: 0.3,
                         fill: true,
                         pointBackgroundColor: chartColors.success,
                         pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 5
+                        pointBorderWidth: 1,
+                        pointRadius: 3
                     }]
                 },
                 options: {
@@ -1587,8 +1512,7 @@ if (isset($_SESSION['success_msg'])) {
                         data: <?= json_encode($bookings_data) ?>,
                         backgroundColor: chartColors.primary,
                         borderColor: chartColors.primary,
-                        borderWidth: 1,
-                        borderRadius: 6
+                        borderWidth: 1
                     }]
                 },
                 options: {
@@ -1616,51 +1540,6 @@ if (isset($_SESSION['success_msg'])) {
                             }
                         }
                     }
-                }
-            });
-            
-            // Add fade-in animation to cards
-            const cards = document.querySelectorAll('.fade-in');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.1}s`;
-            });
-            
-            // Add hover effect to stat cards
-            document.querySelectorAll('.stat-card').forEach(card => {
-                card.addEventListener('mouseenter', function() {
-                    this.style.transform = 'translateY(-5px)';
-                });
-                
-                card.addEventListener('mouseleave', function() {
-                    this.style.transform = 'translateY(0)';
-                });
-            });
-            
-            // Add count-up animation to stats
-            const statValues = document.querySelectorAll('.stat-content h3');
-            statValues.forEach(stat => {
-                let text = stat.textContent;
-                let isCurrency = text.includes('$');
-                let target = parseFloat(text.replace('$', '').replace(',', '').replace('%', ''));
-                
-                if (!isNaN(target)) {
-                    let current = 0;
-                    const increment = target / 20;
-                    const timer = setInterval(() => {
-                        current += increment;
-                        if (current >= target) {
-                            current = target;
-                            clearInterval(timer);
-                        }
-                        
-                        if (text.includes('%')) {
-                            stat.textContent = current.toFixed(1) + '%';
-                        } else if (isCurrency) {
-                            stat.textContent = '$' + current.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                        } else {
-                            stat.textContent = Math.round(current).toLocaleString();
-                        }
-                    }, 50);
                 }
             });
             

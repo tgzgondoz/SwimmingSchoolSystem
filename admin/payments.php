@@ -1,203 +1,257 @@
-
 <?php
-// admin/payments.php
+// admin/payments.php - Professional Payments Management
 session_start();
-include __DIR__ . '/../inc/db.php';
-include __DIR__ . '/../inc/functions.php';
+require_once __DIR__ . '/../inc/db.php';
+require_once __DIR__ . '/../inc/functions.php';
 
-// Check database connection
-if (!$conn) {
-    die("Database connection error.");
+// Authentication and role check
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
+    header('Location: ../login.php');
+    exit();
 }
 
-requireRole('admin');
-$user = getCurrentUser($conn);
+$admin_id = $_SESSION['user_id'];
+$success_msg = '';
+$error_msg = '';
 
-// Initialize messages
-$success_message = $error_message = '';
-
-// Handle payment actions with CSRF protection
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Validate CSRF token
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-        $error_message = "Security token invalid. Please try again.";
-    } else {
-        if (isset($_POST['update_payment_status'])) {
-            $payment_id = filter_input(INPUT_POST, 'payment_id', FILTER_VALIDATE_INT);
-            $status = filter_input(INPUT_POST, 'status', FILTER_SANITIZE_SPECIAL_CHARS);
-            $payment_method = filter_input(INPUT_POST, 'payment_method', FILTER_SANITIZE_SPECIAL_CHARS);
-            $reference_number = filter_input(INPUT_POST, 'reference_number', FILTER_SANITIZE_SPECIAL_CHARS);
-            
-            if ($payment_id && in_array($status, ['pending', 'paid', 'failed'])) {
-                $stmt = $conn->prepare("UPDATE payments SET status = ?, payment_method = ?, reference_number = ? WHERE id = ?");
-                $stmt->bind_param('sssi', $status, $payment_method, $reference_number, $payment_id);
-                $stmt->execute();
-                
-                if ($stmt->affected_rows > 0) {
-                    $success_message = "Payment status updated successfully!";
-                } else {
-                    $error_message = "Failed to update payment status.";
-                }
-                $stmt->close();
-            } else {
-                $error_message = "Invalid payment data.";
-            }
-        }
-        
-        if (isset($_POST['record_manual_payment'])) {
-            $user_id = filter_input(INPUT_POST, 'user_id', FILTER_VALIDATE_INT);
-            $amount = filter_input(INPUT_POST, 'amount', FILTER_VALIDATE_FLOAT);
-            $payment_method = filter_input(INPUT_POST, 'payment_method', FILTER_SANITIZE_SPECIAL_CHARS);
-            $reference_number = filter_input(INPUT_POST, 'reference_number', FILTER_SANITIZE_SPECIAL_CHARS);
-            $description = filter_input(INPUT_POST, 'description', FILTER_SANITIZE_SPECIAL_CHARS);
-            
-            if ($user_id && $amount && $amount > 0 && $payment_method) {
-                // Validate payment method
-                $allowed_methods = array_keys($zim_payment_methods ?? []);
-                if (!in_array($payment_method, $allowed_methods)) {
-                    $error_message = "Invalid payment method.";
-                } else {
-                    $stmt = $conn->prepare("INSERT INTO payments (user_id, amount, payment_method, reference_number, description, status, payment_date) VALUES (?, ?, ?, ?, ?, 'paid', NOW())");
-                    $stmt->bind_param('idsss', $user_id, $amount, $payment_method, $reference_number, $description);
-                    $stmt->execute();
-                    
-                    if ($stmt->affected_rows > 0) {
-                        $success_message = "Manual payment recorded successfully!";
-                    } else {
-                        $error_message = "Failed to record manual payment.";
-                    }
-                    $stmt->close();
-                }
-            } else {
-                $error_message = "Invalid payment data. Please check all fields.";
-            }
-        }
-    }
+// Get admin user info
+$user = [];
+$user_stmt = $conn->prepare("SELECT name, email, phone FROM users WHERE id = ? AND role = 'admin'");
+if ($user_stmt) {
+    $user_stmt->bind_param("i", $admin_id);
+    $user_stmt->execute();
+    $user_result = $user_stmt->get_result();
+    $user = $user_result->fetch_assoc() ?: [];
+    $user_stmt->close();
 }
 
-// Generate CSRF token
-$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-$csrf_token = $_SESSION['csrf_token'];
-
-// Zimbabwe payment methods (define before use in SQL)
+// Zimbabwe payment methods
 $zim_payment_methods = [
-    'ecocash' => [
-        'name' => 'EcoCash',
-        'icon' => 'bi-phone',
-        'color' => 'success',
-        'instructions' => 'Use merchant number: 077 123 4567\nReference: Student Name + Invoice Number'
-    ],
-    'onemoney' => [
-        'name' => 'OneMoney',
-        'icon' => 'bi-phone',
-        'color' => 'info',
-        'instructions' => 'Use merchant number: 078 123 4567\nReference: Student Name + Invoice Number'
-    ],
-    'paynow' => [
-        'name' => 'PayNow ZW',
-        'icon' => 'bi-qr-code',
-        'color' => 'primary',
-        'instructions' => 'Scan QR code or use merchant code: AQUAFLOW\nReference: Student Name + Invoice Number'
-    ],
-    'zip' => [
-        'name' => 'ZIP (ZimSwitch)',
-        'icon' => 'bi-credit-card',
-        'color' => 'warning',
-        'instructions' => 'Bank: CBZ\nAccount: 45678901234\nReference: Student Name + Invoice Number'
-    ],
-    'cash_usd' => [
-        'name' => 'Cash (USD)',
-        'icon' => 'bi-cash',
-        'color' => 'secondary',
-        'instructions' => 'Pay at reception during business hours\nGet official receipt'
-    ],
-    'cash_zig' => [
-        'name' => 'Cash (ZIG)',
-        'icon' => 'bi-cash-coin',
-        'color' => 'success',
-        'instructions' => 'Pay at reception during business hours\nGet official receipt'
-    ],
-    'bank_transfer' => [
-        'name' => 'Bank Transfer',
-        'icon' => 'bi-bank',
-        'color' => 'dark',
-        'instructions' => 'Bank: CBZ\nAccount: 45678901234\nBranch: Harare Main\nReference: Student Name + Invoice Number'
-    ]
+    'ecocash' => ['name' => 'EcoCash', 'icon' => 'bi-phone', 'color' => '#16a34a'],
+    'onemoney' => ['name' => 'OneMoney', 'icon' => 'bi-phone', 'color' => '#0891b2'],
+    'paynow' => ['name' => 'PayNow ZW', 'icon' => 'bi-qr-code', 'color' => '#2563eb'],
+    'zip' => ['name' => 'ZIP (ZimSwitch)', 'icon' => 'bi-credit-card', 'color' => '#d97706'],
+    'cash_usd' => ['name' => 'Cash (USD)', 'icon' => 'bi-cash', 'color' => '#6b7280'],
+    'cash_zig' => ['name' => 'Cash (ZIG)', 'icon' => 'bi-cash-coin', 'color' => '#16a34a'],
+    'bank_transfer' => ['name' => 'Bank Transfer', 'icon' => 'bi-bank', 'color' => '#1f2937']
 ];
 
-// Get all payments with user information using prepared statement
-$payments = [];
-$stmt = $conn->prepare("
-    SELECT p.*, u.name AS student_name, u.email
-    FROM payments p 
-    LEFT JOIN users u ON p.user_id = u.id 
-    ORDER BY p.payment_date DESC
-");
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $payments = $result->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+// Handle form actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['update_status'])) {
+        $payment_id = intval($_POST['payment_id'] ?? 0);
+        $status = trim($_POST['status'] ?? '');
+        $payment_method = trim($_POST['payment_method'] ?? '');
+        $reference_number = trim($_POST['reference_number'] ?? '');
+        
+        if ($payment_id <= 0 || !in_array($status, ['pending', 'paid', 'failed'])) {
+            $error_msg = "Invalid payment data.";
+        } else {
+            $stmt = $conn->prepare("UPDATE payments SET status = ?, payment_method = ?, reference_number = ?, updated_at = NOW() WHERE id = ?");
+            $stmt->bind_param("sssi", $status, $payment_method, $reference_number, $payment_id);
+            
+            if ($stmt->execute()) {
+                $success_msg = "Payment status updated successfully!";
+                
+                // Get payment details for logging
+                $log_stmt = $conn->prepare("SELECT amount, user_id FROM payments WHERE id = ?");
+                $log_stmt->bind_param("i", $payment_id);
+                $log_stmt->execute();
+                $log_stmt->bind_result($amount, $user_id);
+                $log_stmt->fetch();
+                $log_stmt->close();
+                
+                // Log the activity
+                logActivity($conn, $admin_id, 'Payment Updated', "Updated payment #$payment_id ($$amount) to $status");
+            } else {
+                $error_msg = "Failed to update payment: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+    }
+    
+    elseif (isset($_POST['record_payment'])) {
+        $student_id = intval($_POST['student_id'] ?? 0);
+        $amount = floatval($_POST['amount'] ?? 0);
+        $payment_method = trim($_POST['payment_method'] ?? '');
+        $reference_number = trim($_POST['reference_number'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        $status = trim($_POST['status'] ?? 'pending');
+        
+        if ($student_id <= 0 || $amount <= 0 || empty($payment_method)) {
+            $error_msg = "Please fill in all required fields with valid data.";
+        } else {
+            $stmt = $conn->prepare("INSERT INTO payments (user_id, amount, payment_method, reference_number, description, status, payment_date, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+            $stmt->bind_param("idssss", $student_id, $amount, $payment_method, $reference_number, $description, $status);
+            
+            if ($stmt->execute()) {
+                $payment_id = $stmt->insert_id;
+                $success_msg = "Payment recorded successfully!";
+                
+                // Get student name for logging
+                $student_stmt = $conn->prepare("SELECT name FROM users WHERE id = ?");
+                $student_stmt->bind_param("i", $student_id);
+                $student_stmt->execute();
+                $student_stmt->bind_result($student_name);
+                $student_stmt->fetch();
+                $student_stmt->close();
+                
+                // Log the activity
+                logActivity($conn, $admin_id, 'Payment Recorded', "Recorded payment #$payment_id ($$amount) for $student_name");
+            } else {
+                $error_msg = "Failed to record payment: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+    }
+    
+    // Store messages in session for redirect
+    if ($success_msg) {
+        $_SESSION['success_msg'] = $success_msg;
+    }
+    if ($error_msg) {
+        $_SESSION['error_msg'] = $error_msg;
+    }
+    
+    // Redirect to prevent form resubmission
+    header("Location: payments.php");
+    exit();
 }
 
-// Get students for manual payment recording
-$students = [];
-$stmt = $conn->prepare("SELECT id, name, email FROM users WHERE role = 'student' ORDER BY name");
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $students = $result->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+// Load messages from session
+if (isset($_SESSION['success_msg'])) {
+    $success_msg = $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
+}
+if (isset($_SESSION['error_msg'])) {
+    $error_msg = $_SESSION['error_msg'];
+    unset($_SESSION['error_msg']);
 }
 
-// Payment statistics using prepared statements
-$total_revenue = $pending_payments = $total_transactions = $successful_transactions = 0;
+// Handle filtering and searching
+$search = $_GET['search'] ?? '';
+$status_filter = $_GET['status'] ?? 'all';
+$method_filter = $_GET['method'] ?? 'all';
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 15;
+$offset = ($page - 1) * $limit;
 
-$stmt = $conn->prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'paid'");
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $total_revenue = $result->fetch_assoc()['total'] ?? 0;
-    $stmt->close();
+// Build WHERE clause
+$where_conditions = ["1=1"];
+$params = [];
+$param_types = '';
+
+if (!empty($search)) {
+    $where_conditions[] = "(u.name LIKE ? OR u.email LIKE ? OR p.reference_number LIKE ?)";
+    $search_param = "%$search%";
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $params[] = $search_param;
+    $param_types .= 'sss';
 }
 
-$stmt = $conn->prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE status = 'pending'");
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $pending_payments = $result->fetch_assoc()['total'] ?? 0;
-    $stmt->close();
+if ($status_filter !== 'all') {
+    $where_conditions[] = "p.status = ?";
+    $params[] = $status_filter;
+    $param_types .= 's';
 }
 
-$stmt = $conn->prepare("SELECT COUNT(*) AS total FROM payments");
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $total_transactions = $result->fetch_assoc()['total'] ?? 0;
-    $stmt->close();
+if ($method_filter !== 'all' && isset($zim_payment_methods[$method_filter])) {
+    $where_conditions[] = "p.payment_method = ?";
+    $params[] = $method_filter;
+    $param_types .= 's';
 }
 
-$stmt = $conn->prepare("SELECT COUNT(*) AS total FROM payments WHERE status = 'paid'");
-if ($stmt) {
+try {
+    // Get payments with user information
+    $sql = "SELECT SQL_CALC_FOUND_ROWS p.*, u.name AS student_name, u.email 
+            FROM payments p 
+            LEFT JOIN users u ON p.user_id = u.id 
+            WHERE " . implode(' AND ', $where_conditions) . " 
+            ORDER BY p.payment_date DESC LIMIT ? OFFSET ?";
+    
+    $params[] = $limit;
+    $params[] = $offset;
+    $param_types .= 'ii';
+    
+    $stmt = $conn->prepare($sql);
+    if ($params) {
+        $stmt->bind_param($param_types, ...$params);
+    }
     $stmt->execute();
-    $result = $stmt->get_result();
-    $successful_transactions = $result->fetch_assoc()['total'] ?? 0;
+    $payments_result = $stmt->get_result();
+    $payments = $payments_result->fetch_all(MYSQLI_ASSOC) ?: [];
     $stmt->close();
-}
-
-// Payment method statistics
-$payment_methods_stats = [];
-$stmt = $conn->prepare("
-    SELECT payment_method, COUNT(*) as count, SUM(amount) as total 
-    FROM payments 
-    WHERE status = 'paid' AND payment_method IS NOT NULL
-    GROUP BY payment_method
-");
-if ($stmt) {
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $payment_methods_stats = $result->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+    
+    // Get total count for pagination
+    $total_result = $conn->query("SELECT FOUND_ROWS() as total");
+    $total_payments = $total_result->fetch_assoc()['total'];
+    $total_pages = ceil($total_payments / $limit);
+    
+    // Get payment statistics
+    $total_revenue = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'paid'")->fetch_assoc()['total'];
+    $pending_payments = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'pending'")->fetch_assoc()['total'];
+    $failed_payments = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'failed'")->fetch_assoc()['total'];
+    $total_transactions = $conn->query("SELECT COUNT(*) as total FROM payments")->fetch_assoc()['total'];
+    
+    // Get payment method statistics
+    $method_stats = [];
+    $method_stmt = $conn->prepare("
+        SELECT payment_method, COUNT(*) as count, SUM(amount) as total 
+        FROM payments 
+        WHERE status = 'paid' AND payment_method IS NOT NULL
+        GROUP BY payment_method
+        ORDER BY total DESC
+    ");
+    $method_stmt->execute();
+    $method_result = $method_stmt->get_result();
+    while ($row = $method_result->fetch_assoc()) {
+        $method_stats[] = $row;
+    }
+    $method_stmt->close();
+    
+    // Get monthly revenue
+    $monthly_revenue = [];
+    $monthly_stmt = $conn->prepare("
+        SELECT 
+            DATE_FORMAT(payment_date, '%Y-%m') as month,
+            SUM(amount) as total
+        FROM payments 
+        WHERE status = 'paid'
+        GROUP BY DATE_FORMAT(payment_date, '%Y-%m')
+        ORDER BY month DESC
+        LIMIT 6
+    ");
+    $monthly_stmt->execute();
+    $monthly_result = $monthly_stmt->get_result();
+    while ($row = $monthly_result->fetch_assoc()) {
+        $monthly_revenue[] = $row;
+    }
+    $monthly_stmt->close();
+    
+    // Get students for manual payment recording
+    $students = $conn->query("SELECT id, name, email FROM users WHERE role = 'student' AND status = 'active' ORDER BY name ASC")->fetch_all(MYSQLI_ASSOC) ?: [];
+    
+    // Get recent payments for dashboard
+    $recent_payments = $conn->query("
+        SELECT p.*, u.name as student_name 
+        FROM payments p 
+        LEFT JOIN users u ON p.user_id = u.id 
+        ORDER BY p.created_at DESC 
+        LIMIT 5
+    ")->fetch_all(MYSQLI_ASSOC) ?: [];
+    
+} catch (Exception $e) {
+    error_log("Payments query error: " . $e->getMessage());
+    $payments = [];
+    $total_payments = 0;
+    $total_pages = 0;
+    $total_revenue = $pending_payments = $failed_payments = $total_transactions = 0;
+    $method_stats = [];
+    $monthly_revenue = [];
+    $students = [];
+    $recent_payments = [];
+    $error_msg = $error_msg ?: "Unable to load payment data. Please try again later.";
 }
 
 // Get current date and time
@@ -211,19 +265,27 @@ $current_date = date('l, F j, Y');
     <title>Manage Payments | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --info: #0dcaf0;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --purple: #6f42c1;
-            --pink: #d63384;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #16a34a;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --info: #0891b2;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
         }
         
         * {
@@ -233,10 +295,11 @@ $current_date = date('l, F j, Y');
         }
         
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--gray-50);
             min-height: 100vh;
-            color: #333;
+            color: var(--gray-800);
+            line-height: 1.5;
         }
         
         .dashboard-container {
@@ -244,11 +307,11 @@ $current_date = date('l, F j, Y');
             min-height: 100vh;
         }
         
-        /* Sidebar */
+        /* Sidebar - Same as students.php */
         .sidebar {
-            width: 260px;
-            background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            width: 240px;
+            background-color: white;
+            border-right: 1px solid var(--gray-200);
             position: fixed;
             top: 0;
             left: 0;
@@ -258,8 +321,8 @@ $current_date = date('l, F j, Y');
         }
         
         .logo-area {
-            padding: 0 25px 25px;
-            border-bottom: 1px solid #eee;
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--gray-200);
             margin-bottom: 20px;
         }
         
@@ -272,29 +335,27 @@ $current_date = date('l, F j, Y');
         }
         
         .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
-            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 20px;
+            font-size: 18px;
         }
         
         .logo-text h3 {
-            font-weight: 700;
-            font-size: 22px;
+            font-weight: 600;
+            font-size: 18px;
             margin: 0;
-            background: linear-gradient(90deg, var(--primary), var(--purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--gray-900);
         }
         
         .logo-text span {
             font-size: 12px;
-            color: #6c757d;
+            color: var(--gray-500);
         }
         
         .nav-menu {
@@ -302,41 +363,35 @@ $current_date = date('l, F j, Y');
         }
         
         .nav-item {
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .nav-link {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 15px;
-            border-radius: 10px;
-            color: #495057;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: var(--gray-600);
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
         
         .nav-link:hover {
-            background: rgba(13, 110, 253, 0.1);
+            background-color: var(--gray-100);
             color: var(--primary);
-            transform: translateX(5px);
         }
         
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background-color: var(--primary);
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
-        }
-        
-        .nav-link.active:hover {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #0a3d9c 100%);
         }
         
         .nav-link i {
-            width: 20px;
+            width: 18px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .logout-section {
@@ -344,118 +399,97 @@ $current_date = date('l, F j, Y');
             position: absolute;
             bottom: 0;
             width: 100%;
-            border-top: 1px solid #eee;
+            border-top: 1px solid var(--gray-200);
         }
         
         /* Main Content */
         .main-content {
             flex: 1;
-            margin-left: 260px;
-            padding: 30px;
+            margin-left: 240px;
+            padding: 24px;
         }
         
         /* Header */
         .header {
-            background: white;
-            border-radius: 15px;
-            padding: 25px 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--gray-200);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--gray-900);
         }
         
         .header-left p {
-            color: #6c757d;
+            color: var(--gray-600);
             margin: 0;
+            font-size: 14px;
         }
         
         .user-profile {
             display: flex;
             align-items: center;
-            gap: 15px;
-            background: var(--light);
-            padding: 12px 20px;
-            border-radius: 10px;
+            gap: 12px;
+            background-color: var(--gray-50);
+            padding: 8px 16px;
+            border-radius: 6px;
         }
         
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         .user-info h5 {
-            font-weight: 600;
+            font-weight: 500;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-info p {
-            color: #6c757d;
-            font-size: 14px;
+            color: var(--gray-500);
+            font-size: 12px;
             margin: 0;
         }
         
         /* Alerts */
         .alert-custom {
-            border-radius: 12px;
-            border: none;
-            padding: 20px 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            animation: slideIn 0.5s ease;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            border-radius: 8px;
+            border: 1px solid;
+            padding: 16px 20px;
+            margin-bottom: 24px;
         }
         
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
         }
         
         .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
             position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
         
         .stat-card::before {
@@ -464,55 +498,110 @@ $current_date = date('l, F j, Y');
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            height: 3px;
         }
         
+        .stat-card:nth-child(1)::before { background-color: var(--success); }
+        .stat-card:nth-child(2)::before { background-color: var(--warning); }
+        .stat-card:nth-child(3)::before { background-color: var(--danger); }
+        .stat-card:nth-child(4)::before { background-color: var(--primary); }
+        .stat-card:nth-child(5)::before { background-color: var(--info); }
+        
         .stat-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            margin-bottom: 20px;
+            font-size: 20px;
+            margin-bottom: 16px;
             color: white;
         }
         
-        .stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, var(--success) 0%, #157347 100%); }
-        .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%); }
-        .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, var(--info) 0%, #0891b2 100%); }
-        .stat-card:nth-child(5) .stat-icon { background: linear-gradient(135deg, var(--purple) 0%, #5936a0 100%); }
+        .stat-card:nth-child(1) .stat-icon { background-color: var(--success); }
+        .stat-card:nth-child(2) .stat-icon { background-color: var(--warning); }
+        .stat-card:nth-child(3) .stat-icon { background-color: var(--danger); }
+        .stat-card:nth-child(4) .stat-icon { background-color: var(--primary); }
+        .stat-card:nth-child(5) .stat-icon { background-color: var(--info); }
         
         .stat-content h3 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            color: var(--dark);
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--gray-900);
         }
         
         .stat-content p {
-            color: #6c757d;
+            color: var(--gray-600);
             font-size: 14px;
             margin: 0;
         }
         
         .stat-subtext {
             font-size: 12px;
-            color: #6c757d;
-            margin-top: 5px;
+            color: var(--gray-500);
+            margin-top: 8px;
+        }
+        
+        /* Payment Methods Grid */
+        .methods-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .method-card {
+            background-color: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .method-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+        
+        .method-card.active {
+            border-color: var(--primary);
+            background-color: var(--gray-50);
+        }
+        
+        .method-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            color: white;
+            font-size: 18px;
+        }
+        
+        .method-name {
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+        
+        .method-stats {
+            font-size: 12px;
+            color: var(--gray-600);
         }
         
         /* Filter Section */
         .filter-section {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            margin-bottom: 30px;
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
+            margin-bottom: 24px;
         }
         
         .filter-header {
@@ -523,47 +612,47 @@ $current_date = date('l, F j, Y');
         }
         
         .filter-header h3 {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .filter-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
         }
         
         .form-group label {
             font-weight: 500;
             margin-bottom: 8px;
-            color: var(--dark);
+            color: var(--gray-800);
+            font-size: 14px;
+            display: block;
         }
         
         /* Table Container */
         .table-container {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            overflow: hidden;
-            border: 1px solid #e9ecef;
-            margin-bottom: 30px;
+            background-color: white;
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
+            margin-bottom: 24px;
         }
         
         .table-header {
-            padding: 20px 25px;
-            border-bottom: 1px solid #e9ecef;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-200);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .table-header h3 {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .table-wrapper {
@@ -573,86 +662,57 @@ $current_date = date('l, F j, Y');
         .table {
             margin: 0;
             width: 100%;
+            font-size: 14px;
         }
         
         .table thead {
-            background: #f8f9fa;
+            background-color: var(--gray-50);
         }
         
         .table th {
             font-weight: 600;
-            color: #495057;
-            padding: 15px 20px;
-            border-bottom: 2px solid #e9ecef;
+            color: var(--gray-700);
+            padding: 12px 16px;
+            border-bottom: 2px solid var(--gray-200);
             white-space: nowrap;
         }
         
         .table td {
-            padding: 15px 20px;
+            padding: 12px 16px;
             vertical-align: middle;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .table tbody tr {
-            transition: all 0.2s ease;
+            border-bottom: 1px solid var(--gray-200);
         }
         
         .table tbody tr:hover {
-            background: #f8f9fa;
+            background-color: var(--gray-50);
         }
         
         /* Status Badges */
         .badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 500;
             font-size: 12px;
         }
         
         .badge-success {
-            background: rgba(25, 135, 84, 0.1);
+            background-color: rgba(22, 163, 74, 0.1);
             color: var(--success);
         }
         
         .badge-warning {
-            background: rgba(255, 193, 7, 0.1);
+            background-color: rgba(217, 119, 6, 0.1);
             color: var(--warning);
         }
         
         .badge-danger {
-            background: rgba(220, 53, 69, 0.1);
+            background-color: rgba(220, 38, 38, 0.1);
             color: var(--danger);
         }
         
-        .badge-info {
-            background: rgba(13, 202, 240, 0.1);
-            color: var(--info);
-        }
-        
-        .badge-primary {
-            background: rgba(13, 110, 253, 0.1);
-            color: var(--primary);
-        }
-        
         .badge-secondary {
-            background: rgba(108, 117, 125, 0.1);
-            color: #6c757d;
-        }
-        
-        /* Action Buttons */
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-        }
-        
-        .btn-icon {
-            width: 32px;
-            height: 32px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 8px;
+            background-color: rgba(107, 114, 128, 0.1);
+            color: var(--gray-600);
         }
         
         /* Payment Method Badges */
@@ -660,95 +720,58 @@ $current_date = date('l, F j, Y');
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            font-size: 11px;
+            font-size: 12px;
             padding: 4px 8px;
-            border-radius: 6px;
+            border-radius: 4px;
+            background-color: var(--gray-100);
+            color: var(--gray-700);
         }
         
-        /* Payment Methods Grid */
-        .payment-methods-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin: 20px 0;
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 6px;
         }
         
-        .payment-method-card {
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .payment-method-card:hover {
-            border-color: #3b82f6;
-            background: #f8fafc;
-        }
-        
-        .payment-method-card.active {
-            border-color: #3b82f6;
-            background: #eff6ff;
-        }
-        
-        .payment-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 8px;
+        .btn-icon {
+            width: 28px;
+            height: 28px;
+            padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 8px;
-            font-size: 20px;
-        }
-        
-        .instructions-box {
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 12px;
-            font-size: 12px;
-            white-space: pre-line;
-        }
-        
-        .currency-badge {
-            font-size: 10px;
-            padding: 2px 6px;
             border-radius: 4px;
-            margin-left: 4px;
         }
-        
-        .usd-badge { background: #dcfce7; color: #166534; }
-        .zig-badge { background: #fef3c7; color: #92400e; }
         
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 48px 20px;
         }
         
         .empty-state i {
-            font-size: 64px;
-            color: #dee2e6;
-            margin-bottom: 20px;
+            font-size: 48px;
+            color: var(--gray-300);
+            margin-bottom: 16px;
         }
         
         .empty-state h4 {
             font-weight: 600;
-            color: #6c757d;
-            margin-bottom: 10px;
+            color: var(--gray-600);
+            margin-bottom: 8px;
+            font-size: 16px;
         }
         
         .empty-state p {
-            color: #6c757d;
+            color: var(--gray-500);
             margin-bottom: 20px;
+            font-size: 14px;
         }
         
         /* Pagination */
         .pagination-container {
-            padding: 20px 25px;
-            border-top: 1px solid #e9ecef;
+            padding: 16px 20px;
+            border-top: 1px solid var(--gray-200);
             display: flex;
             justify-content: center;
         }
@@ -758,32 +781,32 @@ $current_date = date('l, F j, Y');
         }
         
         .page-link {
-            border: 1px solid #dee2e6;
+            border: 1px solid var(--gray-300);
             color: var(--primary);
-            padding: 8px 16px;
-            border-radius: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
             margin: 0 2px;
+            font-size: 14px;
         }
         
         .page-item.active .page-link {
-            background: var(--primary);
+            background-color: var(--primary);
             border-color: var(--primary);
             color: white;
         }
         
         /* Modal */
         .modal-content {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
         }
         
         .modal-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background-color: var(--primary);
             color: white;
             border-bottom: none;
-            border-radius: 15px 15px 0 0;
-            padding: 25px;
+            border-radius: 8px 8px 0 0;
+            padding: 20px;
         }
         
         .modal-title {
@@ -791,17 +814,18 @@ $current_date = date('l, F j, Y');
         }
         
         .modal-body {
-            padding: 25px;
+            padding: 20px;
         }
         
         .modal-footer {
-            border-top: 1px solid #e9ecef;
-            padding: 20px 25px;
+            border-top: 1px solid var(--gray-200);
+            padding: 16px 20px;
         }
         
         .form-label {
             font-weight: 500;
             margin-bottom: 8px;
+            font-size: 14px;
         }
         
         .form-label.required::after {
@@ -809,24 +833,40 @@ $current_date = date('l, F j, Y');
             color: var(--danger);
         }
         
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Monthly Revenue Chart */
+        .revenue-chart {
+            margin-top: 20px;
         }
         
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
+        .chart-bar {
+            height: 4px;
+            background-color: var(--gray-200);
+            border-radius: 2px;
+            margin-bottom: 8px;
+            overflow: hidden;
+        }
+        
+        .chart-fill {
+            height: 100%;
+            background-color: var(--primary);
+            border-radius: 2px;
+        }
+        
+        .chart-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--gray-600);
         }
         
         /* Responsive */
         @media (max-width: 992px) {
             .sidebar {
-                width: 70px;
+                width: 64px;
             }
             
             .main-content {
-                margin-left: 70px;
+                margin-left: 64px;
             }
             
             .logo-text, .nav-text {
@@ -840,49 +880,64 @@ $current_date = date('l, F j, Y');
         
         @media (max-width: 768px) {
             .main-content {
-                padding: 20px;
+                padding: 16px;
             }
             
             .header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 12px;
                 text-align: center;
             }
             
-            .stats-grid {
-                grid-template-columns: 1fr;
+            .filter-header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
             }
             
             .filter-grid {
                 grid-template-columns: 1fr;
             }
             
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .methods-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
             .table-header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 12px;
             }
             
             .action-buttons {
                 flex-wrap: wrap;
                 justify-content: center;
             }
-            
-            .payment-methods-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            }
         }
         
         @media (max-width: 576px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .methods-grid {
+                grid-template-columns: 1fr;
+            }
+            
             .table-wrapper {
-                font-size: 14px;
+                font-size: 13px;
             }
             
             .table th, .table td {
-                padding: 10px;
+                padding: 8px 10px;
             }
             
-            .payment-methods-grid {
-                grid-template-columns: 1fr;
+            .action-buttons {
+                flex-direction: column;
+                gap: 4px;
             }
         }
     </style>
@@ -950,7 +1005,7 @@ $current_date = date('l, F j, Y');
             
             <div class="logout-section">
                 <form method="post" action="logout.php" style="margin:0;">
-                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:10px 12px;">
                         <i class="bi bi-box-arrow-right"></i>
                         <span class="nav-text">Logout</span>
                     </button>
@@ -961,10 +1016,10 @@ $current_date = date('l, F j, Y');
         <!-- Main Content -->
         <main class="main-content">
             <!-- Header -->
-            <header class="header fade-in">
+            <header class="header">
                 <div class="header-left">
                     <h1>Manage Payments</h1>
-                    <p>Total Transactions: <?= $total_transactions ?> • <?= $current_date ?></p>
+                    <p>Total Revenue: $<?= number_format($total_revenue, 2) ?> • <?= $current_date ?></p>
                 </div>
                 <div class="user-profile">
                     <div class="user-avatar">
@@ -978,24 +1033,24 @@ $current_date = date('l, F j, Y');
             </header>
             
             <!-- Alerts -->
-            <?php if ($success_message): ?>
+            <?php if ($success_msg): ?>
                 <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
                     <i class="bi bi-check-circle-fill me-2"></i>
-                    <?= htmlspecialchars($success_message) ?>
+                    <?= htmlspecialchars($success_msg) ?>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
             
-            <?php if ($error_message): ?>
+            <?php if ($error_msg): ?>
                 <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
                     <i class="bi bi-exclamation-circle-fill me-2"></i>
-                    <?= htmlspecialchars($error_message) ?>
+                    <?= htmlspecialchars($error_msg) ?>
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             <?php endif; ?>
             
             <!-- Stats Cards -->
-            <div class="stats-grid fade-in">
+            <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class="bi bi-cash-stack"></i>
@@ -1003,7 +1058,7 @@ $current_date = date('l, F j, Y');
                     <div class="stat-content">
                         <h3>$<?= number_format($total_revenue, 2) ?></h3>
                         <p>Total Revenue</p>
-                        <div class="stat-subtext">All paid payments</div>
+                        <div class="stat-subtext">All successful payments</div>
                     </div>
                 </div>
                 
@@ -1020,6 +1075,17 @@ $current_date = date('l, F j, Y');
                 
                 <div class="stat-card">
                     <div class="stat-icon">
+                        <i class="bi bi-x-circle"></i>
+                    </div>
+                    <div class="stat-content">
+                        <h3>$<?= number_format($failed_payments, 2) ?></h3>
+                        <p>Failed Payments</p>
+                        <div class="stat-subtext">Require attention</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">
                         <i class="bi bi-credit-card"></i>
                     </div>
                     <div class="stat-content">
@@ -1031,52 +1097,115 @@ $current_date = date('l, F j, Y');
                 
                 <div class="stat-card">
                     <div class="stat-icon">
-                        <i class="bi bi-check-circle"></i>
+                        <i class="bi bi-graph-up"></i>
                     </div>
                     <div class="stat-content">
-                        <h3><?= number_format($successful_transactions) ?></h3>
-                        <p>Successful</p>
-                        <div class="stat-subtext">Paid transactions</div>
+                        <h3><?= count($monthly_revenue) > 0 ? '$' . number_format($monthly_revenue[0]['total'] ?? 0, 2) : '$0.00' ?></h3>
+                        <p>This Month</p>
+                        <div class="stat-subtext">Current month revenue</div>
                     </div>
                 </div>
             </div>
             
+            <!-- Payment Methods Section -->
+            <div class="filter-section">
+                <h4 class="mb-4" style="font-size: 16px;">Payment Methods Performance</h4>
+                <div class="methods-grid">
+                    <?php foreach ($zim_payment_methods as $method_key => $method): ?>
+                        <?php 
+                        $method_stat = array_filter($method_stats, function($stat) use ($method_key) {
+                            return $stat['payment_method'] === $method_key;
+                        });
+                        $method_stat = $method_stat ? array_values($method_stat)[0] : null;
+                        ?>
+                        <div class="method-card" onclick="filterByMethod('<?= $method_key ?>')">
+                            <div class="method-icon" style="background-color: <?= $method['color'] ?>">
+                                <i class="bi <?= $method['icon'] ?>"></i>
+                            </div>
+                            <div class="method-name"><?= $method['name'] ?></div>
+                            <div class="method-stats">
+                                <?php if ($method_stat): ?>
+                                    <?= $method_stat['count'] ?> transactions • $<?= number_format($method_stat['total'], 2) ?>
+                                <?php else: ?>
+                                    No transactions
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            
+            <!-- Monthly Revenue Chart -->
+            <?php if (!empty($monthly_revenue)): ?>
+                <div class="filter-section">
+                    <h4 class="mb-4" style="font-size: 16px;">Monthly Revenue (Last 6 Months)</h4>
+                    <div class="revenue-chart">
+                        <?php 
+                        $max_amount = max(array_column($monthly_revenue, 'total'));
+                        foreach ($monthly_revenue as $revenue): 
+                            $percentage = $max_amount > 0 ? ($revenue['total'] / $max_amount) * 100 : 0;
+                        ?>
+                            <div class="mb-3">
+                                <div class="chart-label">
+                                    <span><?= date('F Y', strtotime($revenue['month'] . '-01')) ?></span>
+                                    <span>$<?= number_format($revenue['total'], 2) ?></span>
+                                </div>
+                                <div class="chart-bar">
+                                    <div class="chart-fill" style="width: <?= $percentage ?>%"></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
             <!-- Filter Section -->
-            <div class="filter-section fade-in">
+            <div class="filter-section">
                 <div class="filter-header">
-                    <h3>Payment Management</h3>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+                    <h3>Filter Payments</h3>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordPaymentModal" style="font-size: 14px;">
                         <i class="bi bi-plus-circle me-2"></i> Record Payment
                     </button>
                 </div>
-                <div class="filter-grid">
+                <form method="GET" class="filter-grid">
                     <div class="form-group">
                         <label>Search</label>
-                        <input type="text" class="form-control" id="searchInput" placeholder="Search by student name, email, or reference...">
+                        <input type="text" class="form-control" name="search" value="<?= htmlspecialchars($search) ?>" placeholder="Student name, email, or reference...">
                     </div>
                     <div class="form-group">
                         <label>Status</label>
-                        <select class="form-select" id="statusFilter">
-                            <option value="">All Status</option>
-                            <option value="paid">Paid</option>
-                            <option value="pending">Pending</option>
-                            <option value="failed">Failed</option>
+                        <select class="form-select" name="status">
+                            <option value="all" <?= $status_filter === 'all' ? 'selected' : '' ?>>All Status</option>
+                            <option value="paid" <?= $status_filter === 'paid' ? 'selected' : '' ?>>Paid</option>
+                            <option value="pending" <?= $status_filter === 'pending' ? 'selected' : '' ?>>Pending</option>
+                            <option value="failed" <?= $status_filter === 'failed' ? 'selected' : '' ?>>Failed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Method</label>
+                        <select class="form-select" name="method">
+                            <option value="all" <?= $method_filter === 'all' ? 'selected' : '' ?>>All Methods</option>
+                            <?php foreach ($zim_payment_methods as $method_key => $method): ?>
+                                <option value="<?= $method_key ?>" <?= $method_filter === $method_key ? 'selected' : '' ?>>
+                                    <?= $method['name'] ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="form-group d-flex align-items-end">
-                        <button type="button" id="clearFilters" class="btn btn-outline-secondary w-100">
-                            <i class="bi bi-arrow-clockwise me-2"></i> Reset Filters
+                        <button type="submit" class="btn btn-primary w-100" style="font-size: 14px;">
+                            <i class="bi bi-funnel me-2"></i> Apply Filters
                         </button>
                     </div>
-                </div>
+                </form>
             </div>
             
             <!-- Payments Table -->
-            <div class="table-container fade-in">
+            <div class="table-container">
                 <div class="table-header">
                     <h3>Payment History</h3>
                     <div>
-                        <span class="text-muted">Showing <?= count($payments) ?> transactions</span>
+                        <span class="text-muted" style="font-size: 14px;">Showing <?= count($payments) ?> of <?= $total_payments ?> payments</span>
                     </div>
                 </div>
                 
@@ -1085,8 +1214,8 @@ $current_date = date('l, F j, Y');
                         <div class="empty-state">
                             <i class="bi bi-credit-card"></i>
                             <h4>No Payments Found</h4>
-                            <p>No payment records available.</p>
-                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+                            <p>No payments match your search criteria. Try adjusting your filters.</p>
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordPaymentModal" style="font-size: 14px;">
                                 <i class="bi bi-plus-circle me-2"></i> Record New Payment
                             </button>
                         </div>
@@ -1104,64 +1233,61 @@ $current_date = date('l, F j, Y');
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach($payments as $payment): ?>
+                                <?php foreach ($payments as $payment): ?>
+                                    <?php $method = $zim_payment_methods[$payment['payment_method']] ?? null; ?>
                                     <tr>
                                         <td>
-                                            <div class="fw-semibold"><?= htmlspecialchars($payment['student_name'] ?? 'Unknown') ?></div>
-                                            <div class="text-muted" style="font-size: 13px;">
-                                                <?= htmlspecialchars($payment['email'] ?? '') ?>
+                                            <div class="d-flex align-items-center">
+                                                <div class="student-avatar me-3">
+                                                    <?= isset($payment['student_name']) ? strtoupper(substr($payment['student_name'], 0, 1)) : 'U' ?>
+                                                </div>
+                                                <div>
+                                                    <div class="fw-medium" style="font-size: 14px;"><?= htmlspecialchars($payment['student_name'] ?? 'Unknown') ?></div>
+                                                    <small class="text-muted" style="font-size: 12px;"><?= htmlspecialchars($payment['email'] ?? '') ?></small>
+                                                </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="fw-bold text-success">$<?= number_format($payment['amount'] ?? 0, 2) ?></div>
+                                            <div class="fw-bold text-success">$<?= number_format($payment['amount'], 2) ?></div>
                                         </td>
                                         <td>
-                                            <?php if(!empty($payment['payment_method'])): ?>
-                                                <span class="payment-method-badge bg-<?= $zim_payment_methods[$payment['payment_method']]['color'] ?? 'secondary' ?>-subtle text-<?= $zim_payment_methods[$payment['payment_method']]['color'] ?? 'secondary' ?>">
-                                                    <i class="bi <?= $zim_payment_methods[$payment['payment_method']]['icon'] ?? 'bi-credit-card' ?>"></i>
-                                                    <?= htmlspecialchars($zim_payment_methods[$payment['payment_method']]['name'] ?? ucfirst($payment['payment_method'])) ?>
+                                            <?php if ($method): ?>
+                                                <span class="payment-method-badge">
+                                                    <i class="bi <?= $method['icon'] ?>"></i>
+                                                    <?= $method['name'] ?>
                                                 </span>
                                             <?php else: ?>
-                                                <span class="badge badge-secondary">Not specified</span>
+                                                <span class="badge badge-secondary">Unknown</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <code><?= !empty($payment['reference_number']) ? htmlspecialchars($payment['reference_number']) : 'N/A' ?></code>
+                                            <code style="font-size: 12px;"><?= !empty($payment['reference_number']) ? htmlspecialchars($payment['reference_number']) : 'N/A' ?></code>
                                         </td>
                                         <td>
-                                            <div class="fw-medium"><?= date("M j, Y", strtotime($payment['payment_date'] ?? 'now')) ?></div>
-                                            <div class="text-muted" style="font-size: 13px;">
-                                                <?= date("g:i A", strtotime($payment['payment_date'] ?? 'now')) ?>
-                                            </div>
+                                            <?= date('M j, Y', strtotime($payment['payment_date'])) ?><br>
+                                            <small class="text-muted" style="font-size: 12px;"><?= date('g:i A', strtotime($payment['payment_date'])) ?></small>
                                         </td>
                                         <td>
-                                            <form method="POST" class="d-inline">
-                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                                <input type="hidden" name="payment_id" value="<?= $payment['id'] ?>">
-                                                <input type="hidden" name="payment_method" value="<?= htmlspecialchars($payment['payment_method'] ?? '') ?>">
-                                                <input type="hidden" name="reference_number" value="<?= htmlspecialchars($payment['reference_number'] ?? '') ?>">
-                                                <select name="status" class="form-select form-select-sm payment-status" style="width: 100px;" onchange="this.form.submit()">
-                                                    <option value="pending" <?= ($payment['status'] ?? '') == 'pending' ? 'selected' : '' ?>>Pending</option>
-                                                    <option value="paid" <?= ($payment['status'] ?? '') == 'paid' ? 'selected' : '' ?>>Paid</option>
-                                                    <option value="failed" <?= ($payment['status'] ?? '') == 'failed' ? 'selected' : '' ?>>Failed</option>
-                                                </select>
-                                                <input type="hidden" name="update_payment_status" value="1">
-                                            </form>
+                                            <?php if ($payment['status'] === 'paid'): ?>
+                                                <span class="badge badge-success">Paid</span>
+                                            <?php elseif ($payment['status'] === 'pending'): ?>
+                                                <span class="badge badge-warning">Pending</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-danger">Failed</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <div class="action-buttons">
                                                 <button class="btn btn-outline-primary btn-sm btn-icon" 
-                                                        title="View Details" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#paymentDetailsModal" 
-                                                        onclick="viewPayment(<?= htmlspecialchars(json_encode($payment)) ?>, <?= htmlspecialchars(json_encode($zim_payment_methods)) ?>)">
+                                                        data-bs-toggle="modal" data-bs-target="#viewPaymentModal"
+                                                        onclick="viewPayment(<?= htmlspecialchars(json_encode($payment)) ?>, <?= htmlspecialchars(json_encode($zim_payment_methods)) ?>)"
+                                                        title="View Details">
                                                     <i class="bi bi-eye"></i>
                                                 </button>
                                                 <button class="btn btn-outline-primary btn-sm btn-icon" 
-                                                        title="Edit Payment" 
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#editPaymentModal"
-                                                        onclick="editPayment(<?= htmlspecialchars(json_encode($payment)) ?>)">
+                                                        data-bs-toggle="modal" data-bs-target="#editPaymentModal"
+                                                        onclick="editPayment(<?= htmlspecialchars(json_encode($payment)) ?>)"
+                                                        title="Edit Payment">
                                                     <i class="bi bi-pencil"></i>
                                                 </button>
                                             </div>
@@ -1173,37 +1299,89 @@ $current_date = date('l, F j, Y');
                     <?php endif; ?>
                 </div>
                 
-                <!-- Pagination would go here if implemented -->
+                <!-- Pagination -->
+                <?php if ($total_pages > 1): ?>
+                    <div class="pagination-container">
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination">
+                                <?php if ($page > 1): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page - 1])) ?>" aria-label="Previous">
+                                            <span aria-hidden="true">&laquo;</span>
+                                        </a>
+                                    </li>
+                                <?php endif; ?>
+                                
+                                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                    <?php if ($i == 1 || $i == $total_pages || ($i >= $page - 2 && $i <= $page + 2)): ?>
+                                        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+                                            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>">
+                                                <?= $i ?>
+                                            </a>
+                                        </li>
+                                    <?php elseif ($i == $page - 3 || $i == $page + 3): ?>
+                                        <li class="page-item disabled">
+                                            <span class="page-link">...</span>
+                                        </li>
+                                    <?php endif; ?>
+                                <?php endfor; ?>
+                                
+                                <?php if ($page < $total_pages): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $page + 1])) ?>" aria-label="Next">
+                                            <span aria-hidden="true">&raquo;</span>
+                                        </a>
+                                    </li>
+                                <?php endif; ?>
+                            </ul>
+                        </nav>
+                    </div>
+                <?php endif; ?>
             </div>
             
-            <!-- Payment Methods Statistics -->
-            <?php if (!empty($payment_methods_stats)): ?>
-                <div class="table-container fade-in">
+            <!-- Recent Payments -->
+            <?php if (!empty($recent_payments)): ?>
+                <div class="table-container">
                     <div class="table-header">
-                        <h3>Payment Methods Summary</h3>
+                        <h3>Recent Payments</h3>
                     </div>
                     <div class="table-wrapper">
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Payment Method</th>
-                                    <th>Transactions</th>
-                                    <th>Total Amount</th>
-                                    <th>Average Amount</th>
+                                    <th>Student</th>
+                                    <th>Amount</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($payment_methods_stats as $method): ?>
+                                <?php foreach ($recent_payments as $payment): ?>
                                     <tr>
+                                        <td><?= htmlspecialchars($payment['student_name'] ?? 'Unknown') ?></td>
+                                        <td class="fw-bold text-success">$<?= number_format($payment['amount'], 2) ?></td>
                                         <td>
-                                            <span class="payment-method-badge bg-<?= $zim_payment_methods[$method['payment_method']]['color'] ?? 'secondary' ?>-subtle text-<?= $zim_payment_methods[$method['payment_method']]['color'] ?? 'secondary' ?>">
-                                                <i class="bi <?= $zim_payment_methods[$method['payment_method']]['icon'] ?? 'bi-credit-card' ?>"></i>
-                                                <?= htmlspecialchars($zim_payment_methods[$method['payment_method']]['name'] ?? ucfirst($method['payment_method'])) ?>
-                                            </span>
+                                            <?php $method = $zim_payment_methods[$payment['payment_method']] ?? null; ?>
+                                            <?php if ($method): ?>
+                                                <span class="badge badge-secondary">
+                                                    <i class="bi <?= $method['icon'] ?> me-1"></i>
+                                                    <?= substr($method['name'], 0, 10) ?>
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
-                                        <td><?= $method['count'] ?></td>
-                                        <td>$<?= number_format($method['total'] ?? 0, 2) ?></td>
-                                        <td>$<?= $method['count'] > 0 ? number_format(($method['total'] ?? 0) / $method['count'], 2) : '0.00' ?></td>
+                                        <td>
+                                            <?php if ($payment['status'] === 'paid'): ?>
+                                                <span class="badge badge-success">Paid</span>
+                                            <?php elseif ($payment['status'] === 'pending'): ?>
+                                                <span class="badge badge-warning">Pending</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-danger">Failed</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <small class="text-muted"><?= date('H:i', strtotime($payment['payment_date'])) ?></small>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -1214,72 +1392,73 @@ $current_date = date('l, F j, Y');
         </main>
     </div>
     
-    <!-- Record Manual Payment Modal -->
+    <!-- Record Payment Modal -->
     <div class="modal fade" id="recordPaymentModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Record Manual Payment</h5>
+                    <h5 class="modal-title">Record New Payment</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST" id="recordPaymentForm">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label required">Student</label>
-                                <select class="form-select" name="user_id" required>
+                                <select class="form-select" name="student_id" required>
                                     <option value="">Select Student</option>
-                                    <?php foreach($students as $student): ?>
+                                    <?php foreach ($students as $student): ?>
                                         <option value="<?= $student['id'] ?>"><?= htmlspecialchars($student['name']) ?> (<?= htmlspecialchars($student['email']) ?>)</option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label required">Amount (USD)</label>
-                                <input type="number" class="form-control" name="amount" step="0.01" min="0" required>
+                                <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required placeholder="0.00">
                             </div>
-                            <div class="col-12">
+                            <div class="col-md-6">
                                 <label class="form-label required">Payment Method</label>
-                                <div class="payment-methods-grid">
-                                    <?php foreach($zim_payment_methods as $method => $details): ?>
-                                        <label class="payment-method-card">
-                                            <input type="radio" name="payment_method" value="<?= $method ?>" required class="d-none">
-                                            <div class="payment-icon bg-<?= $details['color'] ?> bg-opacity-10 text-<?= $details['color'] ?>">
-                                                <i class="bi <?= $details['icon'] ?>"></i>
-                                            </div>
-                                            <h6 class="mb-2"><?= $details['name'] ?></h6>
-                                            <?php if(strpos($method, 'cash') !== false): ?>
-                                                <span class="currency-badge <?= $method === 'cash_usd' ? 'usd-badge' : 'zig-badge' ?>">
-                                                    <?= $method === 'cash_usd' ? 'USD' : 'ZIG' ?>
-                                                </span>
-                                            <?php endif; ?>
-                                        </label>
+                                <select class="form-select" name="payment_method" required>
+                                    <option value="">Select Method</option>
+                                    <?php foreach ($zim_payment_methods as $method_key => $method): ?>
+                                        <option value="<?= $method_key ?>"><?= $method['name'] ?></option>
                                     <?php endforeach; ?>
-                                </div>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status">
+                                    <option value="pending">Pending</option>
+                                    <option value="paid" selected>Paid</option>
+                                    <option value="failed">Failed</option>
+                                </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Reference Number</label>
-                                <input type="text" class="form-control" name="reference_number" placeholder="e.g., EC123456, ZW789012">
+                                <input type="text" class="form-control" name="reference_number" placeholder="EC123456, ZW789012...">
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label">Payment Date</label>
+                                <input type="datetime-local" class="form-control" name="payment_date" value="<?= date('Y-m-d\TH:i') ?>">
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label">Description</label>
-                                <textarea class="form-control" name="description" rows="2" placeholder="Payment for swimming classes..."></textarea>
+                                <textarea class="form-control" name="description" rows="3" placeholder="Payment for swimming classes, equipment, etc..."></textarea>
                             </div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" form="recordPaymentForm" name="record_manual_payment" class="btn btn-primary">Record Payment</button>
+                        <button type="submit" name="record_payment" class="btn btn-primary">Record Payment</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
     
-    <!-- Payment Details Modal -->
-    <div class="modal fade" id="paymentDetailsModal" tabindex="-1">
-        <div class="modal-dialog">
+    <!-- View Payment Modal -->
+    <div class="modal fade" id="viewPaymentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Payment Details</h5>
@@ -1287,21 +1466,48 @@ $current_date = date('l, F j, Y');
                 </div>
                 <div class="modal-body">
                     <div class="row g-3">
-                        <div class="col-12">
-                            <h6>Student Information</h6>
-                            <p class="mb-1"><strong>Name:</strong> <span id="detail_student_name"></span></p>
-                            <p class="mb-1"><strong>Email:</strong> <span id="detail_student_email"></span></p>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Student</label>
+                            <p class="fw-medium" id="view_student_name"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Amount</label>
+                            <p class="fw-bold text-success" id="view_amount"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Payment Method</label>
+                            <p id="view_payment_method"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Status</label>
+                            <p id="view_status"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Reference Number</label>
+                            <p id="view_reference"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Payment Date</label>
+                            <p id="view_date"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Created At</label>
+                            <p id="view_created_at"></p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted">Last Updated</label>
+                            <p id="view_updated_at"></p>
                         </div>
                         <div class="col-12">
-                            <h6>Payment Details</h6>
-                            <p class="mb-1"><strong>Amount:</strong> <span id="detail_amount"></span></p>
-                            <p class="mb-1"><strong>Status:</strong> <span id="detail_status"></span></p>
-                            <p class="mb-1"><strong>Method:</strong> <span id="detail_method"></span></p>
-                            <p class="mb-1"><strong>Reference:</strong> <span id="detail_reference"></span></p>
-                            <p class="mb-1"><strong>Date:</strong> <span id="detail_date"></span></p>
-                            <p class="mb-1"><strong>Description:</strong> <span id="detail_description"></span></p>
+                            <label class="form-label text-muted">Description</label>
+                            <div class="border rounded p-3 bg-light">
+                                <p id="view_description" class="mb-0"></p>
+                            </div>
                         </div>
                     </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -1316,41 +1522,39 @@ $current_date = date('l, F j, Y');
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form method="POST" id="editPaymentForm">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                     <input type="hidden" name="payment_id" id="edit_payment_id">
-                    <input type="hidden" name="update_payment_status" value="1">
                     <div class="modal-body">
                         <div class="row g-3">
                             <div class="col-12">
-                                <label class="form-label">Amount (USD)</label>
-                                <input type="number" class="form-control" name="amount" id="edit_amount" step="0.01" min="0" required>
+                                <label class="form-label required">Amount (USD)</label>
+                                <input type="number" class="form-control" name="amount" id="edit_amount" step="0.01" min="0.01" required>
                             </div>
                             <div class="col-12">
-                                <label class="form-label">Payment Method</label>
+                                <label class="form-label required">Payment Method</label>
                                 <select class="form-select" name="payment_method" id="edit_payment_method" required>
-                                    <option value="">Select Payment Method</option>
-                                    <?php foreach($zim_payment_methods as $method => $details): ?>
-                                        <option value="<?= $method ?>"><?= $details['name'] ?></option>
+                                    <option value="">Select Method</option>
+                                    <?php foreach ($zim_payment_methods as $method_key => $method): ?>
+                                        <option value="<?= $method_key ?>"><?= $method['name'] ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="col-12">
-                                <label class="form-label">Reference Number</label>
-                                <input type="text" class="form-control" name="reference_number" id="edit_reference_number">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Status</label>
+                                <label class="form-label required">Status</label>
                                 <select class="form-select" name="status" id="edit_status" required>
                                     <option value="pending">Pending</option>
                                     <option value="paid">Paid</option>
                                     <option value="failed">Failed</option>
                                 </select>
                             </div>
+                            <div class="col-12">
+                                <label class="form-label">Reference Number</label>
+                                <input type="text" class="form-control" name="reference_number" id="edit_reference_number">
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Update Payment</button>
+                        <button type="submit" name="update_status" class="btn btn-primary">Update Payment</button>
                     </div>
                 </form>
             </div>
@@ -1360,63 +1564,30 @@ $current_date = date('l, F j, Y');
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Payment method selection in modal
-            const paymentMethodCards = document.querySelectorAll('.payment-method-card');
-            paymentMethodCards.forEach(card => {
-                card.addEventListener('click', function() {
-                    paymentMethodCards.forEach(c => c.classList.remove('active'));
-                    this.classList.add('active');
-                    this.querySelector('input').checked = true;
-                });
-            });
-
-            // Search functionality
-            document.getElementById('searchInput').addEventListener('input', function(e) {
-                const searchTerm = e.target.value.toLowerCase();
-                const rows = document.querySelectorAll('tbody tr');
-                
-                rows.forEach(row => {
-                    const text = row.textContent.toLowerCase();
-                    row.style.display = text.includes(searchTerm) ? '' : 'none';
-                });
-            });
-
-            // Status filter functionality
-            document.getElementById('statusFilter').addEventListener('change', function(e) {
-                const status = e.target.value;
-                const rows = document.querySelectorAll('tbody tr');
-                
-                rows.forEach(row => {
-                    if (!status) {
-                        row.style.display = '';
-                        return;
-                    }
-                    
-                    const statusSelect = row.querySelector('.payment-status');
-                    if (statusSelect && statusSelect.value === status) {
-                        row.style.display = '';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-            });
-
-            // Clear filters
-            document.getElementById('clearFilters').addEventListener('click', function() {
-                document.getElementById('searchInput').value = '';
-                document.getElementById('statusFilter').value = '';
-                
-                const rows = document.querySelectorAll('tbody tr');
-                rows.forEach(row => {
-                    row.style.display = '';
-                });
-            });
-
+            // Edit payment function
+            window.editPayment = function(payment) {
+                document.getElementById('edit_payment_id').value = payment.id;
+                document.getElementById('edit_amount').value = payment.amount;
+                document.getElementById('edit_payment_method').value = payment.payment_method || '';
+                document.getElementById('edit_status').value = payment.status || 'pending';
+                document.getElementById('edit_reference_number').value = payment.reference_number || '';
+            }
+            
             // View payment function
             window.viewPayment = function(payment, paymentMethods) {
-                document.getElementById('detail_student_name').textContent = payment.student_name || 'Unknown';
-                document.getElementById('detail_student_email').textContent = payment.email || 'N/A';
-                document.getElementById('detail_amount').textContent = '$' + parseFloat(payment.amount || 0).toFixed(2);
+                document.getElementById('view_student_name').textContent = payment.student_name || 'Unknown';
+                document.getElementById('view_amount').textContent = '$' + parseFloat(payment.amount || 0).toFixed(2);
+                
+                const method = payment.payment_method ? paymentMethods[payment.payment_method] : null;
+                if (method) {
+                    document.getElementById('view_payment_method').innerHTML = `
+                        <span class="payment-method-badge">
+                            <i class="bi ${method.icon}"></i> ${method.name}
+                        </span>
+                    `;
+                } else {
+                    document.getElementById('view_payment_method').textContent = 'Not specified';
+                }
                 
                 // Status
                 const statusText = payment.status || 'unknown';
@@ -1426,39 +1597,70 @@ $current_date = date('l, F j, Y');
                     case 'pending': statusClass = 'badge-warning'; break;
                     case 'failed': statusClass = 'badge-danger'; break;
                 }
-                document.getElementById('detail_status').innerHTML = `<span class="badge ${statusClass}">${statusText.charAt(0).toUpperCase() + statusText.slice(1)}</span>`;
+                document.getElementById('view_status').innerHTML = `<span class="badge ${statusClass}">${statusText.charAt(0).toUpperCase() + statusText.slice(1)}</span>`;
                 
-                // Payment method
-                const paymentMethod = payment.payment_method ? paymentMethods[payment.payment_method] : null;
-                if (paymentMethod) {
-                    document.getElementById('detail_method').innerHTML = `
-                        <span class="payment-method-badge bg-${paymentMethod.color}-subtle text-${paymentMethod.color}">
-                            <i class="bi ${paymentMethod.icon}"></i> ${paymentMethod.name}
-                        </span>
-                    `;
-                } else {
-                    document.getElementById('detail_method').textContent = 'Not specified';
-                }
-                
-                document.getElementById('detail_reference').textContent = payment.reference_number || 'N/A';
-                document.getElementById('detail_date').textContent = new Date(payment.payment_date || Date.now()).toLocaleString('en-US');
-                document.getElementById('detail_description').textContent = payment.description || 'N/A';
-            };
-
-            // Edit payment function
-            window.editPayment = function(payment) {
-                document.getElementById('edit_payment_id').value = payment.id || '';
-                document.getElementById('edit_amount').value = payment.amount || '';
-                document.getElementById('edit_payment_method').value = payment.payment_method || '';
-                document.getElementById('edit_reference_number').value = payment.reference_number || '';
-                document.getElementById('edit_status').value = payment.status || 'pending';
-            };
-
-            // Add fade-in animation to cards
-            const cards = document.querySelectorAll('.fade-in');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.1}s`;
-            });
+                document.getElementById('view_reference').textContent = payment.reference_number || 'N/A';
+                document.getElementById('view_date').textContent = payment.payment_date ? 
+                    new Date(payment.payment_date).toLocaleString('en-US') : 'N/A';
+                document.getElementById('view_created_at').textContent = payment.created_at ? 
+                    new Date(payment.created_at).toLocaleString('en-US') : 'N/A';
+                document.getElementById('view_updated_at').textContent = payment.updated_at ? 
+                    new Date(payment.updated_at).toLocaleString('en-US') : 'N/A';
+                document.getElementById('view_description').textContent = payment.description || 'None';
+            }
+            
+            // Filter by payment method
+            window.filterByMethod = function(method) {
+                const url = new URL(window.location);
+                url.searchParams.set('method', method);
+                window.location.href = url.toString();
+            }
+            
+            // Form validation
+            const recordForm = document.getElementById('recordPaymentForm');
+            if (recordForm) {
+                recordForm.addEventListener('submit', function(e) {
+                    const amount = this.querySelector('[name="amount"]');
+                    const paymentMethod = this.querySelector('[name="payment_method"]');
+                    const studentId = this.querySelector('[name="student_id"]');
+                    
+                    if (!studentId.value) {
+                        e.preventDefault();
+                        alert('Please select a student.');
+                        return false;
+                    }
+                    
+                    if (!paymentMethod.value) {
+                        e.preventDefault();
+                        alert('Please select a payment method.');
+                        return false;
+                    }
+                    
+                    if (!amount.value || parseFloat(amount.value) <= 0) {
+                        e.preventDefault();
+                        alert('Please enter a valid amount greater than 0.');
+                        return false;
+                    }
+                    
+                    return true;
+                });
+            }
+            
+            // Search functionality
+            const searchInput = document.querySelector('input[name="search"]');
+            const searchForm = searchInput?.closest('form');
+            
+            if (searchInput && searchForm) {
+                let searchTimeout;
+                searchInput.addEventListener('input', function() {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        if (this.value.length >= 3 || this.value.length === 0) {
+                            searchForm.submit();
+                        }
+                    }, 500);
+                });
+            }
             
             // Auto-dismiss alerts after 5 seconds
             const alerts = document.querySelectorAll('.alert');
@@ -1469,28 +1671,14 @@ $current_date = date('l, F j, Y');
                 }, 5000);
             });
             
-            // Form validation for record payment
-            const recordForm = document.getElementById('recordPaymentForm');
-            if (recordForm) {
-                recordForm.addEventListener('submit', function(e) {
-                    const amount = this.querySelector('input[name="amount"]');
-                    const paymentMethod = this.querySelector('input[name="payment_method"]:checked');
-                    
-                    if (!paymentMethod) {
-                        alert('Please select a payment method.');
-                        e.preventDefault();
-                        return false;
-                    }
-                    
-                    if (!amount.value || parseFloat(amount.value) <= 0) {
-                        alert('Please enter a valid amount greater than 0.');
-                        e.preventDefault();
-                        return false;
-                    }
-                    
-                    return true;
+            // Payment method cards selection in modal
+            const methodCards = document.querySelectorAll('.method-card');
+            methodCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    methodCards.forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
                 });
-            }
+            });
         });
     </script>
 </body>

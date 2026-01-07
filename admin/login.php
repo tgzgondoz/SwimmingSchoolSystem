@@ -125,21 +125,14 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Sign In | Elite Swimming Academy</title>
+    <title>Admin Login | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --primary-light: #dbeafe;
-            --accent: #8b5cf6;
-            --accent-dark: #7c3aed;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --info: #06b6d4;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
             --gray-50: #f9fafb;
             --gray-100: #f3f4f6;
             --gray-200: #e5e7eb;
@@ -150,8 +143,6 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
             --gray-700: #374151;
             --gray-800: #1f2937;
             --gray-900: #111827;
-            --admin-primary: #1e40af;
-            --admin-dark: #1e3a8a;
         }
 
         * {
@@ -162,7 +153,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+            background-color: #f8fafc;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -172,300 +163,85 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
 
         .login-wrapper {
             width: 100%;
-            max-width: 1200px;
+            max-width: 400px;
             margin: 0 auto;
             padding: 20px;
         }
 
         .login-container {
             background: white;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(30, 64, 175, 0.15);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
             overflow: hidden;
-            display: flex;
-            min-height: 700px;
-            border: 1px solid rgba(30, 64, 175, 0.1);
-        }
-
-        .left-panel {
-            flex: 1;
-            background: linear-gradient(145deg, var(--admin-primary) 0%, var(--admin-dark) 100%);
-            padding: 60px 50px;
-            color: white;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .left-panel::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -30%;
-            width: 500px;
-            height: 500px;
-            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%);
-            border-radius: 50%;
-        }
-
-        .left-panel::after {
-            content: '';
-            position: absolute;
-            bottom: -30%;
-            left: -20%;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%);
-            border-radius: 50%;
-        }
-
-        .logo-area {
-            position: relative;
-            z-index: 2;
-            margin-bottom: 60px;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .logo-icon {
-            width: 60px;
-            height: 60px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 30px;
-            backdrop-filter: blur(10px);
-            border: 2px solid rgba(255,255,255,0.3);
-        }
-
-        .logo-text h1 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 34px;
-            font-weight: 800;
-            margin: 0;
-            letter-spacing: -0.5px;
-        }
-
-        .logo-text p {
-            opacity: 0.9;
-            font-size: 16px;
-            margin: 5px 0 0 0;
-            font-weight: 500;
-        }
-
-        .welcome-text {
-            position: relative;
-            z-index: 2;
-            margin-bottom: 40px;
-        }
-
-        .welcome-text h2 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 38px;
-            font-weight: 800;
-            margin-bottom: 20px;
-            line-height: 1.2;
-        }
-
-        .welcome-text p {
-            font-size: 18px;
-            opacity: 0.9;
-            line-height: 1.6;
-            max-width: 500px;
-        }
-
-        .features-list {
-            position: relative;
-            z-index: 2;
-            margin-top: 40px;
-        }
-
-        .feature {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .feature-icon {
-            width: 52px;
-            height: 52px;
-            background: rgba(255,255,255,0.15);
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            flex-shrink: 0;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-
-        .feature-text h4 {
-            font-size: 17px;
-            font-weight: 700;
-            margin: 0 0 5px 0;
-        }
-
-        .feature-text p {
-            font-size: 15px;
-            opacity: 0.9;
-            margin: 0;
-        }
-
-        .security-badge {
-            position: relative;
-            z-index: 2;
-            background: rgba(255,255,255,0.1);
-            border-radius: 16px;
-            padding: 25px;
-            margin-top: 40px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-
-        .security-badge .badge-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 15px;
-        }
-
-        .badge-icon {
-            width: 44px;
-            height: 44px;
-            background: linear-gradient(45deg, #60a5fa, #93c5fd);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-        }
-
-        .badge-info h5 {
-            font-size: 16px;
-            font-weight: 700;
-            margin: 0;
-        }
-
-        .badge-info p {
-            font-size: 14px;
-            opacity: 0.9;
-            margin: 0;
-        }
-
-        .security-features {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .security-features li {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .security-features li i {
-            color: #10b981;
-            font-size: 12px;
-        }
-
-        .right-panel {
-            flex: 1;
-            padding: 60px 50px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            border: 1px solid var(--gray-200);
         }
 
         .login-header {
-            margin-bottom: 40px;
+            padding: 32px 32px 24px;
+            text-align: center;
+            border-bottom: 1px solid var(--gray-200);
+            background-color: #f8fafc;
         }
 
         .login-header h2 {
-            font-family: 'Poppins', sans-serif;
-            font-size: 36px;
-            font-weight: 800;
-            color: var(--admin-primary);
-            margin-bottom: 10px;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 8px;
         }
 
         .login-header p {
             color: var(--gray-600);
-            font-size: 16px;
-            font-weight: 500;
+            font-size: 14px;
+            font-weight: 400;
         }
 
         .admin-badge {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            background: linear-gradient(90deg, var(--admin-primary), var(--admin-dark));
+            gap: 6px;
+            background-color: #1e40af;
             color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
             font-weight: 600;
-            margin-top: 10px;
+            margin-top: 12px;
+        }
+
+        .login-body {
+            padding: 32px;
         }
 
         .alert-custom {
-            border-radius: 12px;
-            border: none;
-            padding: 18px 22px;
-            margin-bottom: 30px;
-            animation: slideIn 0.5s ease;
-            border-left: 4px solid;
+            border-radius: 8px;
+            border: 1px solid;
+            border-left-width: 4px;
+            padding: 16px;
+            margin-bottom: 24px;
         }
 
         .alert-custom.alert-danger {
-            background: linear-gradient(90deg, #fee, #fdd);
-            border-left-color: var(--danger);
-        }
-
-        .alert-custom.alert-warning {
-            background: linear-gradient(90deg, #fffbeb, #fef3c7);
-            border-left-color: var(--warning);
+            background-color: #fef2f2;
+            border-color: #fecaca;
+            border-left-color: #ef4444;
+            color: #991b1b;
         }
 
         .alert-custom i {
-            font-size: 20px;
-            margin-right: 12px;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            font-size: 16px;
+            margin-right: 8px;
         }
 
         .form-group {
-            margin-bottom: 25px;
-            position: relative;
+            margin-bottom: 20px;
         }
 
         .form-label {
             font-weight: 600;
             color: var(--gray-800);
-            margin-bottom: 10px;
-            font-size: 15px;
+            margin-bottom: 8px;
+            font-size: 14px;
             display: block;
         }
 
@@ -474,56 +250,57 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
         }
 
         .form-control {
-            padding: 16px 18px;
-            border: 2px solid var(--gray-200);
-            border-radius: 14px;
-            font-size: 16px;
-            transition: all 0.3s ease;
+            padding: 12px 16px;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
             background: white;
-            font-weight: 500;
+            font-weight: 400;
+            width: 100%;
         }
 
         .form-control:focus {
-            border-color: var(--admin-primary);
-            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+            border-color: var(--primary);
             outline: none;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
         }
 
         .input-icon {
             position: absolute;
-            right: 18px;
+            right: 16px;
             top: 50%;
             transform: translateY(-50%);
-            color: var(--gray-500);
+            color: var(--gray-400);
             pointer-events: none;
         }
 
         .password-toggle {
             position: absolute;
-            right: 18px;
+            right: 16px;
             top: 50%;
             transform: translateY(-50%);
             background: none;
             border: none;
             color: var(--gray-500);
             cursor: pointer;
-            transition: color 0.3s ease;
-            width: 24px;
-            height: 24px;
+            transition: color 0.2s ease;
+            width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
         .password-toggle:hover {
-            color: var(--admin-primary);
+            color: var(--primary);
         }
 
         .options-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }
 
         .form-check {
@@ -531,120 +308,86 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
         }
 
         .form-check-input:checked {
-            background-color: var(--admin-primary);
-            border-color: var(--admin-primary);
+            background-color: var(--primary);
+            border-color: var(--primary);
         }
 
         .form-check-input:focus {
-            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.25);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-check-label {
+            font-size: 14px;
+            color: var(--gray-700);
         }
 
         .forgot-password {
-            color: var(--admin-primary);
+            color: var(--primary);
             text-decoration: none;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s ease;
+            font-size: 13px;
+            font-weight: 500;
+            transition: color 0.2s ease;
         }
 
         .forgot-password:hover {
-            color: var(--admin-dark);
+            color: var(--primary-dark);
             text-decoration: underline;
         }
 
         .btn-login {
-            background: linear-gradient(90deg, var(--admin-primary), var(--admin-dark));
+            background-color: var(--primary);
             color: white;
-            padding: 18px;
+            padding: 12px 20px;
             border: none;
-            border-radius: 14px;
-            font-weight: 700;
-            font-size: 17px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
-            transition: all 0.3s ease;
+            gap: 8px;
+            transition: background-color 0.2s ease;
             cursor: pointer;
-            margin-bottom: 25px;
-            letter-spacing: 0.5px;
+            margin-bottom: 24px;
         }
 
         .btn-login:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 30px rgba(30, 64, 175, 0.3);
-        }
-
-        .btn-login:active {
-            transform: translateY(-1px);
+            background-color: var(--primary-dark);
         }
 
         .btn-login:disabled {
-            opacity: 0.6;
+            background-color: var(--gray-400);
             cursor: not-allowed;
-            transform: none !important;
-            box-shadow: none !important;
-        }
-
-        .demo-credentials {
-            background: var(--gray-50);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 30px;
-            border-left: 4px solid var(--info);
-        }
-
-        .demo-credentials h6 {
-            color: var(--gray-800);
-            font-weight: 700;
-            margin-bottom: 10px;
-            font-size: 15px;
-        }
-
-        .demo-credentials p {
-            color: var(--gray-600);
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
-
-        .demo-credentials .credentials {
-            background: white;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 10px;
-            font-family: 'Consolas', monospace;
-            font-size: 13px;
-            border: 1px solid var(--gray-200);
         }
 
         .back-to-home {
             text-align: center;
-            margin-top: 40px;
-            padding-top: 30px;
+            margin-top: 24px;
+            padding-top: 24px;
             border-top: 1px solid var(--gray-200);
         }
 
         .back-to-home a {
             color: var(--gray-700);
             text-decoration: none;
-            font-weight: 600;
+            font-weight: 500;
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            transition: all 0.3s ease;
+            gap: 6px;
+            transition: color 0.2s ease;
+            font-size: 14px;
         }
 
         .back-to-home a:hover {
-            color: var(--admin-primary);
-            transform: translateX(-5px);
+            color: var(--primary);
         }
 
         .footer-links {
             display: flex;
             justify-content: center;
-            gap: 25px;
-            margin-top: 30px;
+            gap: 20px;
+            margin-top: 24px;
             padding-top: 20px;
             border-top: 1px solid var(--gray-200);
         }
@@ -652,75 +395,42 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
         .footer-links a {
             color: var(--gray-500);
             text-decoration: none;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.3s ease;
+            font-size: 12px;
+            font-weight: 400;
+            transition: color 0.2s ease;
         }
 
         .footer-links a:hover {
-            color: var(--admin-primary);
+            color: var(--primary);
         }
 
         /* Responsive Design */
-        @media (max-width: 992px) {
-            .login-container {
-                flex-direction: column;
-                min-height: auto;
-            }
-            
-            .left-panel, .right-panel {
-                padding: 40px 30px;
-            }
-            
-            .left-panel {
-                display: none; /* Hide left panel on mobile */
-            }
-            
-            .right-panel {
-                padding: 40px 30px;
-            }
-        }
-
         @media (max-width: 768px) {
             .login-wrapper {
-                padding: 10px;
+                padding: 16px;
+                max-width: 100%;
             }
             
-            .right-panel {
-                padding: 30px 20px;
-            }
-            
-            .login-header h2 {
-                font-size: 28px;
+            .login-body {
+                padding: 24px;
             }
             
             .options-row {
                 flex-direction: column;
                 align-items: flex-start;
-                gap: 15px;
+                gap: 12px;
             }
             
             .footer-links {
                 flex-wrap: wrap;
-                gap: 15px;
+                gap: 12px;
             }
-        }
-
-        /* Animation for error */
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-            20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-
-        .shake {
-            animation: shake 0.5s;
         }
 
         /* Loading spinner */
         .spinner-border {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             border-width: 2px;
         }
     </style>
@@ -728,99 +438,34 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
 <body>
     <div class="login-wrapper">
         <div class="login-container">
-            <!-- Left Panel - Admin Branding & Features -->
-            <div class="left-panel">
-                <div class="logo-area">
-                    <div class="logo">
-                        <div class="logo-icon">
-                            <i class="bi bi-shield-lock"></i>
-                        </div>
-                        <div class="logo-text">
-                            <h1>Elite Swimming Academy</h1>
-                            <p>Administration Portal</p>
-                        </div>
-                    </div>
+            <div class="login-header">
+                <h2>Admin Login</h2>
+                <p>Enter administrator credentials to continue</p>
+                <div class="admin-badge">
+                    <i class="bi bi-shield-lock"></i>
+                    <span>Restricted Access</span>
                 </div>
-
-                <div class="welcome-text">
-                    <h2>Admin Access</h2>
-                    <p>Secure administrative access to manage students, instructors, classes, and school operations. Ensure smooth operation of AquaFlow Swimming School.</p>
-                </div>
-
-                <div class="features-list">
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <i class="bi bi-people"></i>
-                        </div>
-                        <div class="feature-text">
-                            <h4>Manage Users</h4>
-                            <p>Control student and instructor accounts</p>
-                        </div>
-                    </div>
-                    
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <i class="bi bi-calendar-week"></i>
-                        </div>
-                        <div class="feature-text">
-                            <h4>Class Scheduling</h4>
-                            <p>Schedule and manage swimming classes</p>
-                        </div>
-                    </div>
-                    
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <i class="bi bi-graph-up-arrow"></i>
-                        </div>
-                        <div class="feature-text">
-                            <h4>Analytics & Reports</h4>
-                            <p>Track performance and generate insights</p>
-                        </div>
-                    </div>
-                    
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <i class="bi bi-gear"></i>
-                        </div>
-                        <div class="feature-text">
-                            <h4>System Settings</h4>
-                            <p>Configure school settings and preferences</p>
-                        </div>
-                    </div>
-                </div>
-
-                
             </div>
 
-            <!-- Right Panel - Admin Login Form -->
-            <div class="right-panel">
-                <div class="login-header">
-                    <h2>Admin Sign In</h2>
-                    <p>Enter administrator credentials to access the dashboard</p>
-                    <div class="admin-badge">
-                        <i class="bi bi-shield-lock"></i>
-                        <span>Restricted Access</span>
-                    </div>
-                </div>
-
+            <div class="login-body">
                 <?php if($error): ?>
                     <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
                         <i class="bi bi-exclamation-octagon"></i>
-                        <div>
-                            <strong>Access Denied</strong>
-                            <div class="mt-1"><?php echo htmlspecialchars($error); ?></div>
+                        <div style="display: inline-block;">
+                            <strong style="display: block; margin-bottom: 4px;">Access Denied</strong>
+                            <div style="font-size: 14px;"><?php echo htmlspecialchars($error); ?></div>
                             <?php if($attempts > 0): ?>
-                                <div class="small mt-2">Security alert: <?php echo $attempts; ?> failed attempt(s)</div>
+                                <div class="small mt-2" style="font-size: 12px; color: #7f1d1d;">Security alert: <?php echo $attempts; ?> failed attempt(s)</div>
                             <?php endif; ?>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="font-size: 12px;"></button>
                     </div>
                 <?php endif; ?>
 
                 <form method="post" id="adminLoginForm" novalidate>
                     <div class="form-group">
                         <label for="adminEmail" class="form-label">
-                            <i class="bi bi-person-badge me-1"></i>Admin Email
+                            <i class="bi bi-envelope me-1"></i>Email Address
                         </label>
                         <div class="input-group">
                             <input type="email" 
@@ -832,14 +477,14 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                                    required
                                    <?php echo $attempts >= 5 ? 'disabled' : ''; ?>>
                             <div class="input-icon">
-                                <i class="bi bi-envelope-at"></i>
+                                <i class="bi bi-person-badge"></i>
                             </div>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label for="adminPassword" class="form-label">
-                            <i class="bi bi-key me-1"></i>Admin Password
+                            <i class="bi bi-lock me-1"></i>Password
                         </label>
                         <div class="input-group">
                             <input type="password" 
@@ -863,11 +508,11 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                                    id="remember"
                                    <?php echo $attempts >= 5 ? 'disabled' : ''; ?>>
                             <label class="form-check-label" for="remember">
-                                <i class="bi bi-clock me-1"></i>Remember for 7 days
+                                Remember me for 7 days
                             </label>
                         </div>
                         <a href="../forgot-password.php?type=admin" class="forgot-password">
-                            <i class="bi bi-lock me-1"></i>Forgot Password?
+                            Forgot Password?
                         </a>
                     </div>
 
@@ -876,10 +521,8 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                             id="adminLoginButton"
                             <?php echo $attempts >= 5 ? 'disabled' : ''; ?>>
                         <i class="bi bi-shield-lock"></i>
-                        <span>Access Admin Dashboard</span>
+                        <span>Sign In</span>
                     </button>
-
-                    
                 </form>
 
                 <div class="back-to-home">
@@ -890,9 +533,9 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                 </div>
 
                 <div class="footer-links">
-                    <a href="privacy.php"><i class="bi bi-shield-check"></i> Privacy Policy</a>
-                    <a href="terms.php"><i class="bi bi-file-text"></i> Terms of Service</a>
-                    <a href="../contact.php"><i class="bi bi-headset"></i> Support</a>
+                    <a href="privacy.php">Privacy Policy</a>
+                    <a href="terms.php">Terms of Service</a>
+                    <a href="../contact.php">Support</a>
                 </div>
             </div>
         </div>
@@ -945,7 +588,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                 const originalHTML = adminLoginButton.innerHTML;
                 adminLoginButton.innerHTML = `
                     <span class="spinner-border spinner-border-sm me-2" role="status"></span>
-                    Verifying Credentials...
+                    Signing in...
                 `;
                 adminLoginButton.disabled = true;
                 
@@ -960,9 +603,7 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
             if (attempts > 0) {
                 const attemptsLeft = maxAttempts - attempts;
                 if (attemptsLeft > 0) {
-                    showWarning(`Security Notice: ${attempts} failed attempt(s). ${attemptsLeft} attempt(s) remaining before lockout.`);
-                } else {
-                    showError('Account temporarily locked. Please try again later or contact administrator.');
+                    showWarning(`${attempts} failed attempt(s). ${attemptsLeft} attempt(s) remaining before lockout.`);
                 }
             }
             
@@ -977,15 +618,6 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                 }, 100);
             }
             
-            // Auto-fill demo credentials on click (optional)
-            adminEmail.addEventListener('click', function() {
-                if (!this.value) {
-                    this.value = 'admin@aquaflow.com';
-                    adminPassword.value = 'password';
-                    adminPassword.focus();
-                }
-            });
-            
             // Helper functions
             function showError(message) {
                 // Create or update alert
@@ -995,22 +627,14 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                     alertDiv.className = 'alert alert-danger alert-custom alert-dismissible fade show';
                     alertDiv.innerHTML = `
                         <i class="bi bi-exclamation-octagon"></i>
-                        <div>
-                            <strong>Access Denied</strong>
-                            <div class="mt-1">${message}</div>
+                        <div style="display: inline-block;">
+                            <strong style="display: block; margin-bottom: 4px;">Access Denied</strong>
+                            <div style="font-size: 14px;">${message}</div>
                         </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="font-size: 12px;"></button>
                     `;
                     adminLoginForm.parentNode.insertBefore(alertDiv, adminLoginForm);
-                } else {
-                    alertDiv.querySelector('strong').nextElementSibling.textContent = message;
                 }
-                
-                // Shake form
-                adminLoginForm.classList.add('shake');
-                setTimeout(() => {
-                    adminLoginForm.classList.remove('shake');
-                }, 500);
             }
             
             function showWarning(message) {
@@ -1018,16 +642,14 @@ if (empty($_SESSION['user_id']) && isset($_COOKIE['admin_remember_token'])) {
                 warningDiv.className = 'alert alert-warning alert-custom alert-dismissible fade show mt-3';
                 warningDiv.innerHTML = `
                     <i class="bi bi-exclamation-triangle"></i>
-                    <div>
-                        <strong>Security Alert</strong>
-                        <div class="mt-1">${message}</div>
+                    <div style="display: inline-block;">
+                        <strong style="display: block; margin-bottom: 4px;">Security Alert</strong>
+                        <div style="font-size: 14px;">${message}</div>
                     </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close" style="font-size: 12px;"></button>
                 `;
                 adminLoginForm.parentNode.insertBefore(warningDiv, adminLoginForm);
             }
-            
-            
         });
     </script>
 </body>

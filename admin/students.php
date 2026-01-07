@@ -340,19 +340,27 @@ $current_date = date('l, F j, Y');
     <title>Manage Students | Elite Swimming Academy</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #0d6efd;
-            --primary-dark: #0a58ca;
-            --success: #198754;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --info: #0dcaf0;
-            --light: #f8f9fa;
-            --dark: #212529;
-            --purple: #6f42c1;
-            --pink: #d63384;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #16a34a;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --info: #0891b2;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
         }
         
         * {
@@ -362,10 +370,11 @@ $current_date = date('l, F j, Y');
         }
         
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--gray-50);
             min-height: 100vh;
-            color: #333;
+            color: var(--gray-800);
+            line-height: 1.5;
         }
         
         .dashboard-container {
@@ -375,9 +384,9 @@ $current_date = date('l, F j, Y');
         
         /* Sidebar */
         .sidebar {
-            width: 260px;
-            background: white;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            width: 240px;
+            background-color: white;
+            border-right: 1px solid var(--gray-200);
             position: fixed;
             top: 0;
             left: 0;
@@ -387,8 +396,8 @@ $current_date = date('l, F j, Y');
         }
         
         .logo-area {
-            padding: 0 25px 25px;
-            border-bottom: 1px solid #eee;
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--gray-200);
             margin-bottom: 20px;
         }
         
@@ -401,29 +410,27 @@ $current_date = date('l, F j, Y');
         }
         
         .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
-            border-radius: 10px;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 20px;
+            font-size: 18px;
         }
         
         .logo-text h3 {
-            font-weight: 700;
-            font-size: 22px;
+            font-weight: 600;
+            font-size: 18px;
             margin: 0;
-            background: linear-gradient(90deg, var(--primary), var(--purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--gray-900);
         }
         
         .logo-text span {
             font-size: 12px;
-            color: #6c757d;
+            color: var(--gray-500);
         }
         
         .nav-menu {
@@ -431,41 +438,35 @@ $current_date = date('l, F j, Y');
         }
         
         .nav-item {
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
         
         .nav-link {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px 15px;
-            border-radius: 10px;
-            color: #495057;
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: var(--gray-600);
             text-decoration: none;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
         
         .nav-link:hover {
-            background: rgba(13, 110, 253, 0.1);
+            background-color: var(--gray-100);
             color: var(--primary);
-            transform: translateX(5px);
         }
         
         .nav-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background-color: var(--primary);
             color: white;
-            box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
-        }
-        
-        .nav-link.active:hover {
-            background: linear-gradient(135deg, var(--primary-dark) 0%, #0a3d9c 100%);
         }
         
         .nav-link i {
-            width: 20px;
+            width: 18px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px;
         }
         
         .logout-section {
@@ -473,118 +474,97 @@ $current_date = date('l, F j, Y');
             position: absolute;
             bottom: 0;
             width: 100%;
-            border-top: 1px solid #eee;
+            border-top: 1px solid var(--gray-200);
         }
         
         /* Main Content */
         .main-content {
             flex: 1;
-            margin-left: 260px;
-            padding: 30px;
+            margin-left: 240px;
+            padding: 24px;
         }
         
         /* Header */
         .header {
-            background: white;
-            border-radius: 15px;
-            padding: 25px 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            border: 1px solid var(--gray-200);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .header-left h1 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            background: linear-gradient(90deg, var(--primary), var(--purple));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--gray-900);
         }
         
         .header-left p {
-            color: #6c757d;
+            color: var(--gray-600);
             margin: 0;
+            font-size: 14px;
         }
         
         .user-profile {
             display: flex;
             align-items: center;
-            gap: 15px;
-            background: var(--light);
-            padding: 12px 20px;
-            border-radius: 10px;
+            gap: 12px;
+            background-color: var(--gray-50);
+            padding: 8px 16px;
+            border-radius: 6px;
         }
         
         .user-avatar {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 18px;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         .user-info h5 {
-            font-weight: 600;
+            font-weight: 500;
             margin: 0;
+            font-size: 14px;
         }
         
         .user-info p {
-            color: #6c757d;
-            font-size: 14px;
+            color: var(--gray-500);
+            font-size: 12px;
             margin: 0;
         }
         
         /* Alerts */
         .alert-custom {
-            border-radius: 12px;
-            border: none;
-            padding: 20px 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            animation: slideIn 0.5s ease;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            border-radius: 8px;
+            border: 1px solid;
+            padding: 16px 20px;
+            margin-bottom: 24px;
         }
         
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
         }
         
         .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
             position: relative;
-            overflow: hidden;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         }
         
         .stat-card::before {
@@ -593,36 +573,32 @@ $current_date = date('l, F j, Y');
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--primary), var(--primary-dark));
+            height: 3px;
+            background-color: var(--primary);
         }
         
         .stat-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 12px;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            margin-bottom: 20px;
+            font-size: 20px;
+            margin-bottom: 16px;
+            background-color: var(--primary);
             color: white;
         }
         
-        .stat-card:nth-child(1) .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-card:nth-child(2) .stat-icon { background: linear-gradient(135deg, var(--success) 0%, #157347 100%); }
-        .stat-card:nth-child(3) .stat-icon { background: linear-gradient(135deg, var(--warning) 0%, #ffca2c 100%); }
-        .stat-card:nth-child(4) .stat-icon { background: linear-gradient(135deg, var(--info) 0%, #0891b2 100%); }
-        
         .stat-content h3 {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            color: var(--dark);
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: var(--gray-900);
         }
         
         .stat-content p {
-            color: #6c757d;
+            color: var(--gray-600);
             font-size: 14px;
             margin: 0;
         }
@@ -630,10 +606,10 @@ $current_date = date('l, F j, Y');
         .stat-trend {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             font-size: 12px;
-            margin-top: 10px;
-            color: #6c757d;
+            margin-top: 8px;
+            color: var(--gray-500);
         }
         
         .trend-up { color: var(--success); }
@@ -641,12 +617,11 @@ $current_date = date('l, F j, Y');
         
         /* Filter Section */
         .filter-section {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            margin-bottom: 30px;
-            border: 1px solid #e9ecef;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
+            margin-bottom: 24px;
         }
         
         .filter-header {
@@ -657,47 +632,77 @@ $current_date = date('l, F j, Y');
         }
         
         .filter-header h3 {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .filter-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
         }
         
         .form-group label {
             font-weight: 500;
             margin-bottom: 8px;
-            color: var(--dark);
+            color: var(--gray-800);
+            font-size: 14px;
+            display: block;
+        }
+        
+        /* Age Distribution */
+        .age-distribution {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .age-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background-color: var(--gray-50);
+            border-radius: 6px;
+            border: 1px solid var(--gray-200);
+        }
+        
+        .age-label {
+            font-weight: 500;
+            color: var(--gray-700);
+            font-size: 14px;
+        }
+        
+        .age-count {
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 14px;
         }
         
         /* Table Container */
         .table-container {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-            overflow: hidden;
-            border: 1px solid #e9ecef;
-            margin-bottom: 30px;
+            background-color: white;
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
+            margin-bottom: 24px;
         }
         
         .table-header {
-            padding: 20px 25px;
-            border-bottom: 1px solid #e9ecef;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-200);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .table-header h3 {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
             margin: 0;
-            color: var(--dark);
+            color: var(--gray-900);
         }
         
         .table-wrapper {
@@ -707,114 +712,113 @@ $current_date = date('l, F j, Y');
         .table {
             margin: 0;
             width: 100%;
+            font-size: 14px;
         }
         
         .table thead {
-            background: #f8f9fa;
+            background-color: var(--gray-50);
         }
         
         .table th {
             font-weight: 600;
-            color: #495057;
-            padding: 15px 20px;
-            border-bottom: 2px solid #e9ecef;
+            color: var(--gray-700);
+            padding: 12px 16px;
+            border-bottom: 2px solid var(--gray-200);
             white-space: nowrap;
         }
         
         .table td {
-            padding: 15px 20px;
+            padding: 12px 16px;
             vertical-align: middle;
-            border-bottom: 1px solid #e9ecef;
-        }
-        
-        .table tbody tr {
-            transition: all 0.2s ease;
+            border-bottom: 1px solid var(--gray-200);
         }
         
         .table tbody tr:hover {
-            background: #f8f9fa;
+            background-color: var(--gray-50);
         }
         
         /* Student Avatar */
         .student-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-weight: 600;
-            font-size: 16px;
+            font-weight: 500;
+            font-size: 14px;
         }
         
         /* Status Badges */
         .badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-weight: 500;
             font-size: 12px;
         }
         
         .badge-success {
-            background: rgba(25, 135, 84, 0.1);
+            background-color: rgba(22, 163, 74, 0.1);
             color: var(--success);
         }
         
         .badge-danger {
-            background: rgba(220, 53, 69, 0.1);
+            background-color: rgba(220, 38, 38, 0.1);
             color: var(--danger);
         }
         
         .badge-secondary {
-            background: rgba(108, 117, 125, 0.1);
-            color: #6c757d;
+            background-color: rgba(107, 114, 128, 0.1);
+            color: var(--gray-600);
         }
         
         /* Action Buttons */
         .action-buttons {
             display: flex;
-            gap: 8px;
+            gap: 6px;
         }
         
         .btn-icon {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 8px;
+            border-radius: 4px;
         }
         
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 60px 20px;
+            padding: 48px 20px;
         }
         
         .empty-state i {
-            font-size: 64px;
-            color: #dee2e6;
-            margin-bottom: 20px;
+            font-size: 48px;
+            color: var(--gray-300);
+            margin-bottom: 16px;
         }
         
         .empty-state h4 {
             font-weight: 600;
-            color: #6c757d;
-            margin-bottom: 10px;
+            color: var(--gray-600);
+            margin-bottom: 8px;
+            font-size: 16px;
         }
         
         .empty-state p {
-            color: #6c757d;
+            color: var(--gray-500);
             margin-bottom: 20px;
+            font-size: 14px;
         }
         
         /* Pagination */
         .pagination-container {
-            padding: 20px 25px;
-            border-top: 1px solid #e9ecef;
+            padding: 16px 20px;
+            border-top: 1px solid var(--gray-200);
             display: flex;
             justify-content: center;
         }
@@ -824,59 +828,32 @@ $current_date = date('l, F j, Y');
         }
         
         .page-link {
-            border: 1px solid #dee2e6;
+            border: 1px solid var(--gray-300);
             color: var(--primary);
-            padding: 8px 16px;
-            border-radius: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
             margin: 0 2px;
+            font-size: 14px;
         }
         
         .page-item.active .page-link {
-            background: var(--primary);
+            background-color: var(--primary);
             border-color: var(--primary);
             color: white;
         }
         
-        /* Age Distribution */
-        .age-distribution {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-top: 20px;
-        }
-        
-        .age-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-        
-        .age-label {
-            font-weight: 500;
-            color: #495057;
-        }
-        
-        .age-count {
-            font-weight: 600;
-            color: var(--primary);
-        }
-        
         /* Modal */
         .modal-content {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
         }
         
         .modal-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background-color: var(--primary);
             color: white;
             border-bottom: none;
-            border-radius: 15px 15px 0 0;
-            padding: 25px;
+            border-radius: 8px 8px 0 0;
+            padding: 20px;
         }
         
         .modal-title {
@@ -884,17 +861,18 @@ $current_date = date('l, F j, Y');
         }
         
         .modal-body {
-            padding: 25px;
+            padding: 20px;
         }
         
         .modal-footer {
-            border-top: 1px solid #e9ecef;
-            padding: 20px 25px;
+            border-top: 1px solid var(--gray-200);
+            padding: 16px 20px;
         }
         
         .form-label {
             font-weight: 500;
             margin-bottom: 8px;
+            font-size: 14px;
         }
         
         .form-label.required::after {
@@ -902,24 +880,14 @@ $current_date = date('l, F j, Y');
             color: var(--danger);
         }
         
-        /* Animations */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.5s ease forwards;
-        }
-        
         /* Responsive */
         @media (max-width: 992px) {
             .sidebar {
-                width: 70px;
+                width: 64px;
             }
             
             .main-content {
-                margin-left: 70px;
+                margin-left: 64px;
             }
             
             .logo-text, .nav-text {
@@ -933,26 +901,32 @@ $current_date = date('l, F j, Y');
         
         @media (max-width: 768px) {
             .main-content {
-                padding: 20px;
+                padding: 16px;
             }
             
             .header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 12px;
                 text-align: center;
             }
             
-            .stats-grid {
-                grid-template-columns: 1fr;
+            .filter-header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
             }
             
             .filter-grid {
                 grid-template-columns: 1fr;
             }
             
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
             .table-header {
                 flex-direction: column;
-                gap: 15px;
+                gap: 12px;
             }
             
             .action-buttons {
@@ -962,12 +936,21 @@ $current_date = date('l, F j, Y');
         }
         
         @media (max-width: 576px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
             .table-wrapper {
-                font-size: 14px;
+                font-size: 13px;
             }
             
             .table th, .table td {
-                padding: 10px;
+                padding: 8px 10px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                gap: 4px;
             }
         }
     </style>
@@ -1035,7 +1018,7 @@ $current_date = date('l, F j, Y');
             
             <div class="logout-section">
                 <form method="post" action="logout.php" style="margin:0;">
-                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:12px 15px;">
+                    <button type="submit" name="confirm_logout" value="1" class="nav-link btn" style="background:none;border:none;width:100%;text-align:left;padding:10px 12px;">
                         <i class="bi bi-box-arrow-right"></i>
                         <span class="nav-text">Logout</span>
                     </button>
@@ -1046,7 +1029,7 @@ $current_date = date('l, F j, Y');
         <!-- Main Content -->
         <main class="main-content">
             <!-- Header -->
-            <header class="header fade-in">
+            <header class="header">
                 <div class="header-left">
                     <h1>Manage Students</h1>
                     <p>Total Students: <?= $total_students_all ?> • <?= $current_date ?></p>
@@ -1080,7 +1063,7 @@ $current_date = date('l, F j, Y');
             <?php endif; ?>
             
             <!-- Stats Cards -->
-            <div class="stats-grid fade-in">
+            <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon">
                         <i class="bi bi-people"></i>
@@ -1136,8 +1119,8 @@ $current_date = date('l, F j, Y');
             </div>
             
             <!-- Age Distribution -->
-            <div class="filter-section fade-in">
-                <h4 class="mb-4">Student Age Distribution</h4>
+            <div class="filter-section">
+                <h4 class="mb-4" style="font-size: 16px;">Student Age Distribution</h4>
                 <div class="age-distribution">
                     <div class="age-item">
                         <span class="age-label">Toddlers (0-5 years)</span>
@@ -1163,10 +1146,10 @@ $current_date = date('l, F j, Y');
             </div>
             
             <!-- Filter Section -->
-            <div class="filter-section fade-in">
+            <div class="filter-section">
                 <div class="filter-header">
                     <h3>Filter Students</h3>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal">
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal" style="font-size: 14px;">
                         <i class="bi bi-plus-circle me-2"></i> Add Student
                     </button>
                 </div>
@@ -1195,7 +1178,7 @@ $current_date = date('l, F j, Y');
                         </select>
                     </div>
                     <div class="form-group d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">
+                        <button type="submit" class="btn btn-primary w-100" style="font-size: 14px;">
                             <i class="bi bi-funnel me-2"></i> Apply Filters
                         </button>
                     </div>
@@ -1203,11 +1186,11 @@ $current_date = date('l, F j, Y');
             </div>
             
             <!-- Students Table -->
-            <div class="table-container fade-in">
+            <div class="table-container">
                 <div class="table-header">
                     <h3>Student Directory</h3>
                     <div>
-                        <span class="text-muted">Showing <?= count($students) ?> of <?= $total_students ?> students</span>
+                        <span class="text-muted" style="font-size: 14px;">Showing <?= count($students) ?> of <?= $total_students ?> students</span>
                     </div>
                 </div>
                 
@@ -1217,7 +1200,7 @@ $current_date = date('l, F j, Y');
                             <i class="bi bi-people"></i>
                             <h4>No Students Found</h4>
                             <p>No students match your search criteria. Try adjusting your filters.</p>
-                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal">
+                            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStudentModal" style="font-size: 14px;">
                                 <i class="bi bi-plus-circle me-2"></i> Add New Student
                             </button>
                         </div>
@@ -1242,15 +1225,15 @@ $current_date = date('l, F j, Y');
                                                     <?= strtoupper(substr($student['name'], 0, 1)) ?>
                                                 </div>
                                                 <div>
-                                                    <div class="fw-semibold"><?= htmlspecialchars($student['name']) ?></div>
-                                                    <small class="text-muted">ID: <?= $student['id'] ?></small>
+                                                    <div class="fw-medium" style="font-size: 14px;"><?= htmlspecialchars($student['name']) ?></div>
+                                                    <small class="text-muted" style="font-size: 12px;">ID: <?= $student['id'] ?></small>
                                                 </div>
                                             </div>
                                         </td>
                                         <td>
-                                            <div class="fw-medium"><?= htmlspecialchars($student['email']) ?></div>
+                                            <div class="fw-medium" style="font-size: 14px;"><?= htmlspecialchars($student['email']) ?></div>
                                             <?php if ($student['phone']): ?>
-                                                <small class="text-muted"><?= htmlspecialchars($student['phone']) ?></small>
+                                                <small class="text-muted" style="font-size: 12px;"><?= htmlspecialchars($student['phone']) ?></small>
                                             <?php endif; ?>
                                         </td>
                                         <td>
@@ -1375,7 +1358,7 @@ $current_date = date('l, F j, Y');
                                 <textarea class="form-control" name="medical_notes" rows="3" placeholder="Any medical conditions, allergies, or special requirements..."></textarea>
                             </div>
                             <div class="col-12">
-                                <div class="alert alert-info">
+                                <div class="alert alert-info" style="font-size: 14px;">
                                     <i class="bi bi-info-circle me-2"></i>
                                     A temporary password will be generated and shown upon successful student creation.
                                 </div>
@@ -1457,7 +1440,7 @@ $current_date = date('l, F j, Y');
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label text-muted">Full Name</label>
-                            <p class="fw-semibold" id="view_name"></p>
+                            <p class="fw-medium" id="view_name"></p>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label text-muted">Email Address</label>
@@ -1603,12 +1586,6 @@ $current_date = date('l, F j, Y');
                     }, 500);
                 });
             }
-            
-            // Add fade-in animation to cards
-            const cards = document.querySelectorAll('.fade-in');
-            cards.forEach((card, index) => {
-                card.style.animationDelay = `${index * 0.1}s`;
-            });
             
             // Auto-dismiss alerts after 5 seconds
             const alerts = document.querySelectorAll('.alert');
